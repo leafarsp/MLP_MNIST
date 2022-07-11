@@ -5,13 +5,17 @@ import classe_rede_neural as nnc
 import cv2 as cv2
 
 
+
 def main():
+
+
+
   L = 2
-  m = [(28 * 28), 10, 10]
+  m = [(28 * 28), 15, 10]
   a = [1.7, 0.9]
   b = [0.002, 1.]
   #b = [2 / 3, 2 / 3, 2 / 3]
-  eta = [0.8, 0.8]
+  eta = [0.9, 0.8]
   alpha = [0.0000,  0.]
 
 
@@ -20,52 +24,67 @@ def main():
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
   # dataset = pd.read_csv('mnist_test.csv')
-  dataset = pd.read_csv('mnist_test.csv')
+  dataset = pd.read_csv('mnist_train_small.csv')
+
 
   #Filtrando apenas o número 1
   # dataset = dataset.loc[dataset['7'] == 1]
-  dataset = dataset[dataset['7'].isin([1,2,3,4,5,6,7,8,9,0])]
+  #dataset = dataset[dataset['6'].isin([1,2,3,4,5,6,7,8,9,0])]
+
   dataset = dataset.iloc[0:]
 
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
-  test_dataset = dataset
+
+
+  test_dataset = pd.read_csv('mnist_test.csv')
+  test_dataset = test_dataset.iloc[0:]
+  test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
+  test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
+
   dataset.head()
 
   rnd_seed = np.random.seed(10)
 
-  n_epoch = 1000
+  n_epoch = 100
   n_inst = len(dataset.index)
   N = n_inst * n_epoch
-  step_plot = int(N / (n_epoch))
+  step_plot = int(N / (n_epoch * 10))
 
-  err_min = 1E-7
-  # a1, a1plt, Eav, n = nnc.train_neural_network(a1, rnd_seed, dataset, dataset, n_epoch, step_plot, eta, alpha, err_min, output_layer_activation)
+  err_min = 0.5
+  # a1, a1plt, Eav, n = nnc.train_neural_network(a1, rnd_seed, dataset, dataset, n_epoch, step_plot, eta, alpha, err_min)
   #
   # a1.save_neural_network()
-  a1 = nnc.load_neural_network('neural_network2.xlsx')
+  #a1 = nnc.load_neural_network('neural_network2.xlsx')
   # print(f'\na2.l[l].w=\n{a2.l[1].w}')
   #
-  a1, a1plt, Eav, n = nnc.train_neural_network(a1, rnd_seed, dataset, dataset, n_epoch, step_plot, eta, alpha, err_min,
-                                               output_layer_activation)
+
+  a1, a1plt, Eav, n , acert = nnc.train_neural_network(a1, 10, rnd_seed, dataset, test_dataset, n_epoch, step_plot, eta, alpha,
+                                               err_min)
   # print(f'\na1.l[l].w=\n{a1.l[1].w}')
+
+  plt_results(a1, a1plt, Eav, dataset, n, acert)
+
+  err = nnc.calculate_err_epoch(dataset,a1,output_layer_activation)
+  print(f'erro:{err}')
   a1.save_neural_network('neural_network2.xlsx')
-  plt_results(a1, a1plt, Eav, dataset, n)
-
-
 def output_layer_activation(output_value):
   d = np.ones(10) * -1
   #num = dataset_shufle.iloc[ni, 0]
   d[output_value] = 1
   return d
 
-def plt_results(a1,a1plt,Eav, dataset, n):
-  n_inst = len(dataset.index)
-  for l in range(0,a1.L):
-    print(f'\n Layer {l}')
-    print(a1.l[l].w)
+def plt_results(a1,a1plt,Eav, dataset, n, acert):
+  # n_inst = len(dataset.index)
+  # for l in range(0,a1.L):
+  #   print(f'\n Layer {l}')
+  #   print(a1.l[l].w)
+  plt.figure(98)
+  plt.plot(acert)
+  plt.title('Acertividade')
+  plt.show()
 
-  print(f'acertividade {teste_acertividade(dataset,a1)}%')
+  #print(f'acertividade {teste_acertividade(dataset,a1)}%')
 
   plt.figure(99)
   plt.plot(Eav)
@@ -92,10 +111,10 @@ def plt_results(a1,a1plt,Eav, dataset, n):
 
 
 
-  acertividade = teste_acertividade(dataset, a1)
-  plt.figure()
-  plt.title('Acertividade')
-  plt.plot(acertividade)
+  # acertividade = teste_acertividade(dataset, a1)
+  # plt.figure()
+  # plt.title('Acertividade')
+  # plt.plot(acertividade)
 
   plt.show()
 
@@ -139,7 +158,7 @@ def digit_recog(rede, image_array=None, training_instance=0, dataset=None):
     # progagação do sinal forward
 
 
-    if image_array.all() == None:
+    if type(image_array) == type(None):
       image_array = list(dataset.iloc[training_instance, 1:(rede.m[0] + 1)])
     # Acrescenta 1 que é relativo ao bias
 
@@ -185,7 +204,7 @@ def teste_acertividade(dataset, a1):
     num_real = dataset.iloc[i, 0]
     # print(len(local_image_array))
     num_rede = digit_recog(a1, training_instance=i, dataset=dataset)[0]
-    print(f'Núm. real: {num_real}, núm rede: {num_rede}')
+    #print(f'Núm. real: {num_real}, núm rede: {num_rede}')
     if num_rede != np.nan:
       if (num_real == num_rede):
         cont_acert += 1
