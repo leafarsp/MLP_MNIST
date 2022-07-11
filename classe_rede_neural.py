@@ -285,7 +285,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
                     estimated_time_end = start_time_epoch + elapsed_time * (N // step_plot - n_cont)
                     n_cont += 1
                     print(f'Instância {n}/{N}, Época {ne}/{n_epoch}, '
-                          f' Acert.: {acert[-1]:.4f}%, eta: {eta[n]:.4f}, dt: {elapsed_time.seconds}s'
+                          f' Acert.: {acert[-1]:.4f}%, eta[L][n]: {eta[n][a1.L-1]:.4f}, dt: {elapsed_time.seconds}s'
                           f' t_end: {estimated_time_end.year:04d}-{estimated_time_end.month:02d}-{estimated_time_end.day:02d}'
                           f'--{estimated_time_end.hour:02d}:{estimated_time_end.minute:02d}:{estimated_time_end.second:02d}')
                     temp_rede = rede_neural(a1.L, a1.m, a1.a, a1.b)
