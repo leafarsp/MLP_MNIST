@@ -44,7 +44,7 @@ def main():
 
   dataset.head()
 
-  rnd_seed = np.random.seed(10)
+  rnd_seed = 10
 
   n_epoch = 100
   n_inst = len(dataset.index)

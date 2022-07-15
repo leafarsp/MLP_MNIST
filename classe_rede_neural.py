@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import datetime as dt
 
-
 class layer():
     def __init__(self, m, m_ant):
         self.w = np.ones((m, m_ant + 1))
@@ -14,7 +13,6 @@ class layer():
         self.delta = np.ones(m)
         self.e = np.ones(m)
 
-
 class rede_neural():
 
     def __init__(self, L, m, a, b):
@@ -24,6 +22,7 @@ class rede_neural():
         self.b = b
         self.l = list()
         self.weights_initialized = False
+        self.fitness = 0
         for i in range(0, L):
             self.l.append(layer(m[i + 1], m[i]))
 
@@ -33,9 +32,11 @@ class rede_neural():
             wlLkj[k] = self.l[l + 1].w[k][j]
         return wlLkj
 
-    def initialize_weights_random(self):
+    def initialize_weights_random(self, random_seed=None):
+        if random_seed is not None:
+            np.random.seed(random_seed)
         for l in range(0, self.L):
-            self.l[l].w = np.random.rand(self.m[l + 1], self.m[l] + 1) * 1.0 - 0.5
+            self.l[l].w = np.random.rand(self.m[l + 1], self.m[l] + 1) * 2. - 1.
             # Inicializa o Bias como zero
             for j in range(0, self.m[l + 1]):
                 self.l[l].w[j][-1] = 0
@@ -133,6 +134,12 @@ class rede_neural():
         self.forward_propagation(x)
         return np.sum((d - self.l[self.L - 1].y) ** 2)
 
+    def set_fitness(self,fitness):
+        self.fitness = fitness
+
+    def get_fitness(self):
+        return self.fitness
+
     def get_output_class(self, threshold=0.8):
         num_out = np.nan
         cont_neuronio_ativo = 0
@@ -206,7 +213,6 @@ def load_neural_network(neural_network_xlsx):
     a1.weights_initialized = True
     return a1
 
-
 def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, learning_rate,
                          momentum, err_min):
     start_time = dt.datetime.now()
@@ -253,7 +259,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     # Inicializa os pesos com valores aleatórios e o bias como zero
     if a1.weights_initialized == False:
-        a1.initialize_weights_random()
+        a1.initialize_weights_random(random_seed=rnd_seed)
 
     # Vetor de pesos para plotar gráficos de evolução deles.
     a1plt = list()
@@ -315,7 +321,6 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     return a1, a1plt, Eav, n, acert
 
-
 def calculate_err_epoch(dataset, a1, func_d):
     n_inst = len(dataset.index)
     e_epoch = 0
@@ -327,14 +332,11 @@ def calculate_err_epoch(dataset, a1, func_d):
     Eav = 1 / (n_inst) * e_epoch
     return Eav
 
-
 def output_layer_activation(output_value, num_classes):
     d = np.ones(num_classes) * -1
     # num = dataset_shufle.iloc[ni, 0]
     d[output_value] = 1.
     return d
-
-
 
 def teste_acertividade(test_dataset, num_classes, neural_network):
     cont_acert = 0
@@ -351,3 +353,33 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
                 cont_acert += 1
 
     return 100 * cont_acert / len(test_dataset)
+
+def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min):
+    n_inst = len(dataset.index)
+
+    population = list()
+
+
+    for ni in range(0,num_individuos):
+        population.append(rede_neural(rede.L,rede.m,rede.a,rede.b))
+        population[-1].initialize_weights_random(ni+rnd_seed)
+
+    best_ind = 0
+    for nind in range(0,num_individuos):
+        dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+        for ni in range(0,n_inst):
+            x = list(dataset_shufle.iloc[ni, 1:(rede.m[0] + 1)])
+            output_value = int(dataset_shufle.iloc[ni, 0])
+            # d = [dataset_shufle.iloc[ni, 0]]
+            d = output_layer_activation(output_value=output_value, num_classes=num_classes)
+            population[nind].forward_propagation(x=x)
+            #print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
+            acert = teste_acertividade(test_dataset, int(num_classes), population[nind])
+
+            population[nind].set_fitness(acert)
+
+    if population[nind].get_fitness() > population[best_ind].get_fitness():
+        best_ind = nind
+
+
+
