@@ -20,6 +20,7 @@ class rede_neural():
         self.m = m
         self.a = a
         self.b = b
+        self.id = 0
         self.l = list()
         self.weights_initialized = False
         self.fitness = 0
@@ -35,8 +36,9 @@ class rede_neural():
     def initialize_weights_random(self, random_seed=None):
         if random_seed is not None:
             np.random.seed(random_seed)
+        weight_limit = 10.
         for l in range(0, self.L):
-            self.l[l].w = np.random.rand(self.m[l + 1], self.m[l] + 1) * 2. - 1.
+            self.l[l].w = np.random.rand(self.m[l + 1], self.m[l] + 1) * 2.* (weight_limit) - weight_limit
             # Inicializa o Bias como zero
             for j in range(0, self.m[l + 1]):
                 self.l[l].w[j][-1] = 0
@@ -139,6 +141,11 @@ class rede_neural():
 
     def get_fitness(self):
         return self.fitness
+
+    def get_id(self):
+        return self.id
+    def set_id(self,id):
+        self.id = id
 
     def get_output_class(self, threshold=0.8):
         num_out = np.nan
@@ -359,10 +366,10 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
 
     population = list()
 
-
     for ni in range(0,num_individuos):
         population.append(rede_neural(rede.L,rede.m,rede.a,rede.b))
         population[-1].initialize_weights_random(ni+rnd_seed)
+        population[-1].id = ni
 
     best_ind = 0
     for nind in range(0,num_individuos):
@@ -378,8 +385,105 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
 
             population[nind].set_fitness(acert)
 
-    if population[nind].get_fitness() > population[best_ind].get_fitness():
-        best_ind = nind
+    # Crossover e seleção K tornament
+    k = 5
+
+    qt_ind = len(population)
+
+    next_gen = list()
+    #Elitismo:
+    next_gen.append(get_best_ind(population=population, k=qt_ind, position=1))
+
+    watchdog = 0
+    while(qt_ind > 0):
+        parent1, parent2 = k_tournament(population=population,k=5)
+
+        print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
+              f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+        # Mutação
+        next_gen.append(mutate(parent1, parent2))
+        remove_individual(population, [parent1.id, parent2.id])
+
+        qt_ind = len(population)
+        watchdog += 1
+        if watchdog > 1000:
+            print('Exit by watchdog.')
+            break
+    print('End of Training')
+
+def mutate(parent1,parent2):
+    return None
+
+def get_best_ind(population, k, position):
+    pass
+
+def get_ind(population, id_list):
+    local_list = list()
+    if type(id_list) is not list:
+        local_list.append(id_list)
+    else:
+        local_list = id_list
+    inds = list()
+    for ind in population:
+        if ind.id in local_list:
+            inds.append(ind)
+    return inds
+
+def clone_ind(ind1,ind2):
+    pass
+
+def k_tournament(population, k, rnd_seed=None):
+    if rnd_seed is not None:
+        np.random.seed(rnd_seed)
+    fighters = list()
+
+    len_population = len(population)
+    fighters.append(np.random.randint(len_population))
+
+    #escolhe aleatóriamente 5 indivídios
+    if k > len(population):
+        k = len(population)
+
+    while(len(fighters) < k):
+        ind = np.random.randint(len_population)
+        if ind not in fighters:
+            fighters.append(ind)
+    parents_ids = [0,0]
+
+    fighters_sorted = [0] * k
+
+    fitness_ant = -999999
+    parents_ids[0] = None
+    # definição do pai
+    pai = 0
+    for i in range(0, k):
+        if population[fighters[i]].fitness > fitness_ant:
+            parents_ids[0] = population[fighters[i]].id
+            fitness_ant = population[fighters[i]].fitness
+            pai = i
+    # definição da mãe
+    fitness_ant = -999999
+    parents_ids[1] = None
+    for i in range(0, k):
+        if i != pai:
+            if population[fighters[i]].fitness > fitness_ant:
+                parents_ids[1] = population[fighters[i]].id
+                fitness_ant = population[fighters[i]].fitness
+
+    return get_ind(population, parents_ids)
 
 
 
+def sort_population(population):
+    pass
+
+def remove_individual(population, id_list):
+    local_list = list()
+    if type(id_list) is not list:
+        local_list.append(id_list)
+    else:
+        local_list = id_list
+
+    for ind in population:
+        if ind.id in local_list:
+            population.remove(ind)
