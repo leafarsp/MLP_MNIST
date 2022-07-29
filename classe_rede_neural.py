@@ -362,60 +362,95 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
     return 100 * cont_acert / len(test_dataset)
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min):
-    n_inst = len(dataset.index)
 
     population = list()
 
-    for ni in range(0,num_individuos):
-        population.append(rede_neural(rede.L,rede.m,rede.a,rede.b))
-        population[-1].initialize_weights_random(ni+rnd_seed)
-        population[-1].id = ni
+    initialize_population(population, num_individuos, rede, rnd_seed)
+    best_ind = get_best_ind(population, 1)
 
-    best_ind = 0
-    for nind in range(0,num_individuos):
+    count_generations = 0
+    watchdog = 0
+    target_fitness = 0.8
+    while(best_ind.fitness > target_fitness and count_generations < 100):
+        count_generations += 1
+
+        population_play(dataset, test_dataset, num_classes, population, num_individuos, rede, rnd_seed)
+
+        # Crossover e seleção K tornament
+        k = 5
+        mutation_probability = 0.05
+        elitism = 2
+
+        next_gen = list()
+        apply_elitism(population, next_gen, elitism)
+        best_ind = get_best_ind(population,1)
+        best_fitness = best_ind.fitness
+
+        while((len(population) > elitism) and watchdog < 1000):
+            watchdog += 1
+
+            parent1, parent2 = k_tournament(population=population,k=5)
+
+            print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
+                  f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+
+            kids = crossover(parent1, parent2)
+
+            mutate(kids,mutation_probability)
+
+            for kid in kids:
+                next_gen.append(kid)
+
+            remove_individual(population, [parent1.id, parent2.id])
+        population = next_gen
+
+    if watchdog > 1000:
+        print('Exit by watchdog.')
+    elif count_generations > 100:
+        print('Exit by end of generations.')
+    else:
+        pass
+        print(f'Best individual: {best_ind.id}, fitness:{best_ind.id}')
+        # salvar indivídio
+    print('End of Training')
+
+def population_play(dataset, test_dataset, num_classes, population, num_individuos, rede, rnd_seed):
+    n_inst = len(dataset.index)
+    for nind in range(0, num_individuos):
         dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
-        for ni in range(0,n_inst):
+        for ni in range(0, n_inst):
             x = list(dataset_shufle.iloc[ni, 1:(rede.m[0] + 1)])
             output_value = int(dataset_shufle.iloc[ni, 0])
             # d = [dataset_shufle.iloc[ni, 0]]
             d = output_layer_activation(output_value=output_value, num_classes=num_classes)
             population[nind].forward_propagation(x=x)
-            #print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
+            # print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
             acert = teste_acertividade(test_dataset, int(num_classes), population[nind])
 
             population[nind].set_fitness(acert)
 
-    # Crossover e seleção K tornament
-    k = 5
+def initialize_population(population, num_individuos, rede, rnd_seed):
+    for ni in range(0, num_individuos):
+        population.append(rede_neural(rede.L, rede.m, rede.a, rede.b))
+        population[-1].initialize_weights_random(ni + rnd_seed)
+        population[-1].id = ni
 
-    qt_ind = len(population)
+def crossover(parent1, parent2):
+    return [None, None]
 
-    next_gen = list()
-    #Elitismo:
-    next_gen.append(get_best_ind(population=population, k=qt_ind, position=1))
-
-    watchdog = 0
-    while(qt_ind > 0):
-        parent1, parent2 = k_tournament(population=population,k=5)
-
-        print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
-              f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
-        # Mutação
-        next_gen.append(mutate(parent1, parent2))
-        remove_individual(population, [parent1.id, parent2.id])
-
-        qt_ind = len(population)
-        watchdog += 1
-        if watchdog > 1000:
-            print('Exit by watchdog.')
-            break
-    print('End of Training')
-
-def mutate(parent1,parent2):
-    return None
-
-def get_best_ind(population, k, position):
+def mutate(inds,prob):
     pass
+
+def get_best_ind(population, position):
+    # Não está funcionando ainda, apenas para poder testar as outras funções
+    return population[position]
+
+
+def apply_elitism(population, next_gen, elitism):
+    # Não está funcionando ainda, apenas para poder testar as outras funções
+    for i in range(0,elitism):
+        next_gen.append(get_best_ind(population=population,  position=i))
+
 
 def get_ind(population, id_list):
     local_list = list()
@@ -470,6 +505,8 @@ def k_tournament(population, k, rnd_seed=None):
                 parents_ids[1] = population[fighters[i]].id
                 fitness_ant = population[fighters[i]].fitness
 
+
+
     return get_ind(population, parents_ids)
 
 
@@ -484,6 +521,8 @@ def remove_individual(population, id_list):
     else:
         local_list = id_list
 
-    for ind in population:
-        if ind.id in local_list:
-            population.remove(ind)
+    for ind_remove in local_list:
+        for ind in population:
+            if ind.id == ind_remove:
+                population.remove(ind)
+                break
