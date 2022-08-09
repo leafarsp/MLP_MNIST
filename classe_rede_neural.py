@@ -361,7 +361,7 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
 
     return 100 * cont_acert / len(test_dataset)
 
-def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min):
+def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min, target_fitness, mut_prob):
 
     population = list()
 
@@ -370,8 +370,8 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
 
     count_generations = 0
     watchdog = 0
-    target_fitness = 0.8
-    while(best_ind.fitness > target_fitness and count_generations < 100):
+
+    while(best_ind.fitness < target_fitness and count_generations < 100):
         count_generations += 1
 
         population_play(dataset, test_dataset, num_classes, population, num_individuos, rede, rnd_seed)
@@ -394,9 +394,9 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
             print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
                   f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
 
-            kids = crossover(parent1, parent2)
+            kids = crossover(parent1, parent2, mut_prob)
 
-            mutate(kids,mutation_probability)
+            #mutate(kids,mutation_probability)
 
             for kid in kids:
                 next_gen.append(kid)
@@ -435,11 +435,43 @@ def initialize_population(population, num_individuos, rede, rnd_seed):
         population[-1].initialize_weights_random(ni + rnd_seed)
         population[-1].id = ni
 
-def crossover(parent1, parent2):
-    return [None, None]
+def crossover(parent1, parent2,prob_mut):
+
+    son1 = rede_neural(parent1.L, parent1.m, parent1.a, parent1.b)
+    son2 = rede_neural(parent2.L, parent2.m, parent2.a, parent2.b)
+
+    for l in range(0,parent1.L):
+        for j in range(0,parent1.m[l+1]):
+            for w in range(0,parent1.m[l]+1):
+
+                prob = np.random.randint(2)
+                weight_mult1 = get_weight_multiplier(prob_mut)
+                weight_mult2 = get_weight_multiplier(prob_mut)
+
+                if prob==0:
+                    son1.l[l].w[w] = parent1.l[l].w[w] * weight_mult1
+                    son2.l[l].w[w] = parent2.l[l].w[w] * weight_mult2
+                else:
+                    son1.l[l].w[w] = parent2.l[l].w[w] * weight_mult1
+                    son2.l[l].w[w] = parent1.l[l].w[w] * weight_mult2
+
+    return [son1, son2]
 
 def mutate(inds,prob):
     pass
+
+def get_weight_multiplier(mutation_prob):
+    weight_mult1 = 1.
+    try:
+        #val_prob_mut1 = np.random.choice([0,1], p=[1. - mutation_prob, mutation_prob])
+        val_prob_mut1 = np.random.choice(2, 1, p=[0.5, 0.5])[0]
+        print(val_prob_mut1)
+    except:
+        print(f'Erro')
+    if val_prob_mut1 == 1:
+        weight_mult1 = 2.
+    return weight_mult1
+
 
 def get_best_ind(population, position):
     # Não está funcionando ainda, apenas para poder testar as outras funções

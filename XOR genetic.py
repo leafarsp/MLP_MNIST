@@ -29,8 +29,10 @@ def main():
     num_individuos = 100
     step_plot = 10
     err_min = 0.1
+    target_fitness = 0.8
+    mut_prob = 0.1
 
-    nnc.train_genetic(a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min)
+    nnc.train_genetic(a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, step_plot, err_min, target_fitness, mut_prob)
 
 
 
