@@ -5,6 +5,7 @@ import classe_rede_neural as nnc
 
 import cv2 as cv2
 import datetime as dt
+
 def main():
     L = 2
     m = [2, 2, 2]
@@ -38,3 +39,4 @@ def main():
 
 if __name__=='__main__':
   main()
+

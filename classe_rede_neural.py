@@ -425,7 +425,7 @@ def population_play(dataset, test_dataset, num_classes, population, num_individu
             d = output_layer_activation(output_value=output_value, num_classes=num_classes)
             population[nind].forward_propagation(x=x)
             # print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
-            acert = teste_acertividade(test_dataset, int(num_classes), population[nind])
+            acert = teste_acertividade(test_dataset, int(num_classes), population[nind])/100
 
             population[nind].set_fitness(acert)
 
@@ -449,39 +449,52 @@ def crossover(parent1, parent2,prob_mut):
                 weight_mult2 = get_weight_multiplier(prob_mut)
 
                 if prob==0:
-                    son1.l[l].w[w] = parent1.l[l].w[w] * weight_mult1
-                    son2.l[l].w[w] = parent2.l[l].w[w] * weight_mult2
+                    son1.l[l].w[j][w] = parent1.l[l].w[j][w] * weight_mult1
+                    son2.l[l].w[j][w] = parent2.l[l].w[j][w] * weight_mult2
                 else:
-                    son1.l[l].w[w] = parent2.l[l].w[w] * weight_mult1
-                    son2.l[l].w[w] = parent1.l[l].w[w] * weight_mult2
+                    son1.l[l].w[j][w] = parent2.l[l].w[j][w] * weight_mult1
+                    son2.l[l].w[j][w] = parent1.l[l].w[j][w] * weight_mult2
 
     return [son1, son2]
 
 def mutate(inds,prob):
     pass
 
+def get_mutation_permission(probability):
+    prob = probability
+    prob_precision = 100
+    prob_int = int(prob * prob_precision)
+    num_al = np.random.randint(prob_precision)
+    rng_prob = np.arange(0, prob_int)
+    result = False
+    if num_al in rng_prob:
+        result = True
+    return result
 def get_weight_multiplier(mutation_prob):
     weight_mult1 = 1.
-    try:
-        #val_prob_mut1 = np.random.choice([0,1], p=[1. - mutation_prob, mutation_prob])
-        val_prob_mut1 = np.random.choice(2, 1, p=[0.5, 0.5])[0]
-        print(val_prob_mut1)
-    except:
-        print(f'Erro')
-    if val_prob_mut1 == 1:
+    if get_mutation_permission(mutation_prob):
         weight_mult1 = 2.
     return weight_mult1
 
 
-def get_best_ind(population, position):
+def get_best_ind(population, rank):
     # Não está funcionando ainda, apenas para poder testar as outras funções
-    return population[position]
+    fitness_list = get_fitness_list(population)
 
+    best_ind = get_ind(population,[fitness_list.loc[rank]['position']])
+    return best_ind[0]
+
+def get_fitness_list(population):
+    dataset = pd.DataFrame(data=np.zeros((len(population),3)),columns=['id','position','fitness'])
+    for i in range(0,len(population)):
+        dataset.loc[i]=[population[i].id,i,population[i].fitness]
+    dataset.sort_values(by=['fitness'],ascending=False, inplace=True)
+    return dataset
 
 def apply_elitism(population, next_gen, elitism):
     # Não está funcionando ainda, apenas para poder testar as outras funções
     for i in range(0,elitism):
-        next_gen.append(get_best_ind(population=population,  position=i))
+        next_gen.append(get_best_ind(population=population,  rank=i))
 
 
 def get_ind(population, id_list):
@@ -496,8 +509,14 @@ def get_ind(population, id_list):
             inds.append(ind)
     return inds
 
-def clone_ind(ind1,ind2):
-    pass
+def clone_ind(ind1):
+    clone = rede_neural(ind1.L, ind1.m, ind1.a, ind1.b)
+
+    for l in range(0, ind1.L):
+        for j in range(0, ind1.m[l + 1]):
+            for w in range(0, ind1.m[l] + 1):
+                clone.l[l].w[j][w] = ind1.l[l].w[j][w]
+    return clone
 
 def k_tournament(population, k, rnd_seed=None):
     if rnd_seed is not None:
@@ -538,8 +557,8 @@ def k_tournament(population, k, rnd_seed=None):
                 fitness_ant = population[fighters[i]].fitness
 
 
-
-    return get_ind(population, parents_ids)
+    parent1, parent2 = get_ind(population, parents_ids)
+    return parent1, parent2
 
 
 
