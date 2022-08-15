@@ -71,7 +71,9 @@ class rede_neural():
         df = pd.DataFrame(data=data, columns=columns)
 
         for l in range(0, self.L):
-            df.loc[0:self.m[l] + 1, l + 1] = np.transpose(self.l[l].w)
+            temp_l = np.transpose(self.l[l].w)
+            print(df.loc[0:self.m[l] + 1, l + 1])
+            df.loc[0:self.m[l] + 1, l + 1] = temp_l
 
         data2 = np.zeros((len(self.m), 4))
         data2[:] = np.nan
@@ -366,17 +368,20 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
     population = list()
     count_generations = 0
     watchdog = 0
+    best_fitness_plt = np.zeros(generations)
 
 
     initialize_population(population, num_individuos, rede, rnd_seed)
-    best_ind = get_best_ind(population, 1)
+    best_ind = get_best_ind(population, 0)
 
 
     while(best_ind.fitness < target_fitness and count_generations < generations):
+
         count_generations += 1
         print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
         population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed)
-
+        best_fitness_plt[count_generations-1] = best_ind.fitness
+        fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
         k = 5
 
@@ -414,7 +419,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
     print(f'Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
         # salvar indivídio
     print('End of Training')
-    return best_ind
+    return best_ind, best_fitness_plt, fitness_list
 
 def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed):
     num_individuos = len(population)
@@ -454,11 +459,11 @@ def crossover(parent1, parent2,prob_mut):
 
 
                 if prob==0:
-                    son1.l[l].w[j][w] = parent1.l[l].w[j][w] * weight_mult1
-                    son2.l[l].w[j][w] = parent2.l[l].w[j][w] * weight_mult2
+                    son1.l[l].w[j][w] = parent1.l[l].w[j][w] + weight_mult1
+                    son2.l[l].w[j][w] = parent2.l[l].w[j][w] + weight_mult2
                 else:
-                    son1.l[l].w[j][w] = parent2.l[l].w[j][w] * weight_mult1
-                    son2.l[l].w[j][w] = parent1.l[l].w[j][w] * weight_mult2
+                    son1.l[l].w[j][w] = parent2.l[l].w[j][w] + weight_mult1
+                    son2.l[l].w[j][w] = parent1.l[l].w[j][w] + weight_mult2
     return [son1, son2]
 
 def mutate(inds,prob):
@@ -476,19 +481,19 @@ def get_mutation_permission(probability):
     return result
 
 def get_weight_multiplier(mutation_prob):
-    weight_mult1 = 1.
+    weight_mult1 = 0.
     if get_mutation_permission(mutation_prob):
-        weight_mult1 = 2.
+        weight_mult1 = 0.5
     return weight_mult1
 
 
 def get_best_ind(population, rank):
 
     fitness_list = get_fitness_list(population)
-    position = fitness_list.loc[rank]['position']
+    position = fitness_list.iloc[rank]['position']
 
     best_ind = get_ind(population,[position])
-    return best_ind[rank]
+    return best_ind[0]
 
 def get_fitness_list(population):
     dataset = pd.DataFrame(data=np.zeros((len(population),3)),columns=['id','position','fitness'])
@@ -500,7 +505,10 @@ def get_fitness_list(population):
 def apply_elitism(population, next_gen, elitism):
     # Não está funcionando ainda, apenas para poder testar as outras funções
     for i in range(0,elitism):
-        next_gen.append(get_best_ind(population=population,  rank=i))
+        best_ind = get_best_ind(population=population,  rank=i)
+        best_ind_clone = clone_ind(best_ind)
+        best_ind_clone.id = i
+        next_gen.append(best_ind_clone)
 
 
 def get_ind(population, id_list):
@@ -530,6 +538,8 @@ def clone_ind(ind1):
     return clone
 
 def k_tournament(population, k, rnd_seed=None):
+    # próxima atualização: fazer utilizando a função .iloc do pandas
+    # agora tá funcionando, mas utilizando a função do pandas pode ficar com menos linhas
     if rnd_seed is not None:
         np.random.seed(rnd_seed)
     fighters = list()
