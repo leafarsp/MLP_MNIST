@@ -27,12 +27,12 @@ def main():
     test_dataset = dataset
 
 
-    num_individuos = 100
+    num_individuos = 10
     generations = 500
     step_plot = 10
     err_min = 0.1
     target_fitness = 0.8
-    mut_prob = 0.8
+    mut_prob = 0.05
     a1.save_neural_network("Xor_Genetic.xlsx")
     #exit()
     a1 = nnc.train_genetic(a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations, step_plot, err_min, target_fitness, mut_prob)

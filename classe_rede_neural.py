@@ -384,7 +384,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
 
         next_gen = list()
         apply_elitism(population, next_gen, elitism)
-        best_ind = get_best_ind(population, 1)
+        best_ind = get_best_ind(population, 0)
 
         watchdog=0
         while (len(population) > elitism) and watchdog < 1000:
@@ -443,13 +443,15 @@ def crossover(parent1, parent2,prob_mut):
     son2 = rede_neural(parent2.L, parent2.m, parent2.a, parent2.b)
 
     for l in range(0,parent1.L):
-        for j in range(0,parent1.m[l+1]):
 
+        for j in range(0,parent1.m[l+1]):
+            prob = np.random.randint(2)
+            weight_mult1 = get_weight_multiplier(prob_mut)
+            weight_mult2 = get_weight_multiplier(prob_mut)
             for w in range(0,parent1.m[l]+1):
 
-                prob = np.random.randint(2)
-                weight_mult1 = get_weight_multiplier(prob_mut)
-                weight_mult2 = get_weight_multiplier(prob_mut)
+
+
 
                 if prob==0:
                     son1.l[l].w[j][w] = parent1.l[l].w[j][w] * weight_mult1
@@ -476,17 +478,17 @@ def get_mutation_permission(probability):
 def get_weight_multiplier(mutation_prob):
     weight_mult1 = 1.
     if get_mutation_permission(mutation_prob):
-        weight_mult1 = 4.
+        weight_mult1 = 2.
     return weight_mult1
 
 
 def get_best_ind(population, rank):
-    # Não está funcionando ainda, apenas para poder testar as outras funções
+
     fitness_list = get_fitness_list(population)
     position = fitness_list.loc[rank]['position']
 
     best_ind = get_ind(population,[position])
-    return best_ind[0]
+    return best_ind[rank]
 
 def get_fitness_list(population):
     dataset = pd.DataFrame(data=np.zeros((len(population),3)),columns=['id','position','fitness'])
