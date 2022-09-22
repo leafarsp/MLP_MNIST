@@ -46,7 +46,7 @@ def main():
 
   rnd_seed = 10
 
-  n_epoch = 100
+  n_epoch = 2
   n_inst = len(dataset.index)
   N = n_inst * n_epoch
   step_plot = int(N / (n_epoch * 10))

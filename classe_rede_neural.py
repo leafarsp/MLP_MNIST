@@ -72,7 +72,7 @@ class rede_neural():
 
         for l in range(0, self.L):
             temp_l = np.transpose(self.l[l].w)
-            print(df.loc[0:self.m[l] + 1, l + 1])
+            # print(df.loc[0:self.m[l] + 1, l + 1])
             df.loc[0:self.m[l] + 1, l + 1] = temp_l
 
         data2 = np.zeros((len(self.m), 4))
@@ -355,6 +355,7 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
         x = list(test_dataset.iloc[i, 1:])
 
         y = neural_network.forward_propagation(x)
+
         num_rede = neural_network.get_output_class()
 
         if num_rede != np.nan:
@@ -362,6 +363,52 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
                 cont_acert += 1
 
     return 100 * cont_acert / len(test_dataset)
+
+def calculate_fitness(test_dataset, neural_network, num_classes):
+    err_avg = 0
+    result = 0
+    for i in range(0, len(test_dataset)):
+
+        num_real = test_dataset.iloc[i, 0]
+        x = list(test_dataset.iloc[i, 1:])
+
+        y = neural_network.forward_propagation(x)
+
+        d = output_layer_activation(num_real,num_classes)
+
+        err = d - y
+
+        err_avg += np.sqrt(np.matmul(err, np.transpose(err))/len(err))
+
+    n_inst = len(test_dataset.index)
+    err_avg = err_avg / n_inst
+    b = 1 + 1 / (1 + np.exp(2))
+    c = -2
+    d = 2
+    a = -1
+    result = b + a / (1 + np.exp(-d * err_avg - c))
+    return result
+
+def teste_neural_network(test_dataset, neural_network):
+    cont_acert = 0
+    acert = 0
+    for i in range(0, len(test_dataset)):
+        result = 'Wrong'
+        num_real = test_dataset.iloc[i, 0]
+        x = list(test_dataset.iloc[i, 1:])
+
+        y = neural_network.forward_propagation(x)
+        num_rede = neural_network.get_output_class()
+
+        if num_rede != np.nan:
+            if (num_real == num_rede):
+                cont_acert += 1
+                result = 'OK'
+
+        print(f'input:{x} output: {num_rede}, output desired: {num_real}, result: {result}')
+    acert = 100 * cont_acert / len(test_dataset)
+    print(f'Acertividade: {acert:.2f}%')
+    return acert
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations, step_plot, err_min, target_fitness, mut_prob):
 
@@ -380,7 +427,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
         count_generations += 1
         print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
         population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed)
-        best_fitness_plt[count_generations-1] = best_ind.fitness
+
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
         k = 5
@@ -390,7 +437,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
         next_gen = list()
         apply_elitism(population, next_gen, elitism)
         best_ind = get_best_ind(population, 0)
-
+        best_fitness_plt[count_generations - 1] = best_ind.fitness
         watchdog=0
         while (len(population) > elitism) and watchdog < 1000:
             watchdog += 1
@@ -419,7 +466,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
     print(f'Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
         # salvar indivídio
     print('End of Training')
-    return best_ind, best_fitness_plt, fitness_list
+    return best_ind, best_fitness_plt, fitness_list, count_generations
 
 def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed):
     num_individuos = len(population)
@@ -430,11 +477,11 @@ def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_s
             x = list(dataset_shufle.iloc[ni, 1:(rede.m[0] + 1)])
             output_value = int(dataset_shufle.iloc[ni, 0])
             # d = [dataset_shufle.iloc[ni, 0]]
-            d = output_layer_activation(output_value=output_value, num_classes=num_classes)
+            #d = output_layer_activation(output_value=output_value, num_classes=num_classes)
             population[nind].forward_propagation(x=x)
             # print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
-            acert = teste_acertividade(test_dataset, int(num_classes), population[nind])/100
-
+            #acert = teste_acertividade(test_dataset, int(num_classes), population[nind])/100
+            acert = calculate_fitness(test_dataset,population[nind],int(num_classes))
             population[nind].set_fitness(acert)
 
 def initialize_population(population, num_individuos, rede, rnd_seed):
