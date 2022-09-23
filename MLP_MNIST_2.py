@@ -60,7 +60,7 @@ def main():
   #
 
   a1, a1plt, Eav, n , acert = nnc.train_neural_network(a1, 10, rnd_seed, dataset, test_dataset, n_epoch, step_plot, eta, alpha,
-                                               err_min)
+                                               err_min, 1.)
   # print(f'\na1.l[l].w=\n{a1.l[1].w}')
 
   plt_results(a1, a1plt, Eav, dataset, n, acert)

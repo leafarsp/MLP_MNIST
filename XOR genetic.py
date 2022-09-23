@@ -30,15 +30,19 @@ def main():
     test_dataset = dataset
 
 
-    num_individuos = 100
-    generations = 500
+    num_individuos = 1000
+    generations = 2000
     step_plot = 10
     err_min = 0.1
     target_fitness = 0.95
     mut_prob = 0.2
+    mutation_multiplyer = 1.
+    weight_limit = 10.
     #a1.initialize_weights_random()
 
-    a1, best_fitness_plt, fitness_list, count_generations = nnc.train_genetic(a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations, step_plot, err_min, target_fitness, mut_prob)
+    a1, best_fitness_plt, fitness_list, count_generations = nnc.train_genetic(
+        a1, num_classes, rnd_seed, dataset,test_dataset, num_individuos, generations,
+        step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer)
     fitness_list.to_excel('fitness_list.xlsx')
 
     a1.save_neural_network("Xor_Genetic.xlsx")
@@ -64,9 +68,9 @@ def plt_retas(rede,dataset, num_inst):
     x_space = np.linspace(-1, 1, 10)
 
     for j in range(0, rede.m[rede.L - 1]):
-        b1 = rede.l[rede.L - 1].w[j][2]
-        w1 = rede.l[rede.L - 1].w[j][0]
-        w2 = rede.l[rede.L - 1].w[j][1]
+        b1 = rede.l[rede.L - 2].w[j][2]
+        w1 = rede.l[rede.L - 2].w[j][0]
+        w2 = rede.l[rede.L - 2].w[j][1]
 
         cy1 = (-b1 - w1 * x_space) / w2
         plt.plot(x_space, cy1)

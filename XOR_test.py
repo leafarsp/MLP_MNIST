@@ -16,9 +16,9 @@ def plt_retas(rede,dataset, num_inst):
     x_space = np.linspace(-1, 1, 10)
 
     for j in range(0, rede.m[rede.L - 1]):
-        b1 = rede.l[rede.L - 1].w[j][2]
-        w1 = rede.l[rede.L - 1].w[j][0]
-        w2 = rede.l[rede.L - 1].w[j][1]
+        b1 = rede.l[rede.L - 2].w[j][2]
+        w1 = rede.l[rede.L - 2].w[j][0]
+        w2 = rede.l[rede.L - 2].w[j][1]
 
         cy1 = (-b1 - w1 * x_space) / w2
         plt.plot(x_space, cy1)
@@ -70,7 +70,7 @@ def main():
     err_min = 0.05
 
     a1, a1plt, Eav, n , acert = nnc.train_neural_network(a1, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, eta, alpha,
-                                                  err_min)
+                                                  err_min, 1.)
 
     a1.save_neural_network('neural_network_XOR_BackProp.xlsx')
     plt_retas(a1,dataset,n_inst)

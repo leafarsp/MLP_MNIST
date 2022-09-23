@@ -33,10 +33,10 @@ class rede_neural():
             wlLkj[k] = self.l[l + 1].w[k][j]
         return wlLkj
 
-    def initialize_weights_random(self, random_seed=None):
+    def initialize_weights_random(self, weight_limit = 10., random_seed=None):
         if random_seed is not None:
             np.random.seed(random_seed)
-        weight_limit = 10.
+        # weight_limit = 10.
         for l in range(0, self.L):
             self.l[l].w = np.random.rand(self.m[l + 1], self.m[l] + 1) * 2.* (weight_limit) - weight_limit
             # Inicializa o Bias como zero
@@ -223,7 +223,7 @@ def load_neural_network(neural_network_xlsx):
     return a1
 
 def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, learning_rate,
-                         momentum, err_min):
+                         momentum, err_min, weight_limit):
     start_time = dt.datetime.now()
 
     print(f'Start time: {start_time.year:04d}-{start_time.month:02d}-{start_time.day:02d}'
@@ -268,7 +268,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     # Inicializa os pesos com valores aleatórios e o bias como zero
     if a1.weights_initialized == False:
-        a1.initialize_weights_random(random_seed=rnd_seed)
+        a1.initialize_weights_random(random_seed=rnd_seed, weight_limit= weight_limit)
 
     # Vetor de pesos para plotar gráficos de evolução deles.
     a1plt = list()
@@ -410,7 +410,9 @@ def teste_neural_network(test_dataset, neural_network):
     print(f'Acertividade: {acert:.2f}%')
     return acert
 
-def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations, step_plot, err_min, target_fitness, mut_prob):
+def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
+                  num_individuos, generations, step_plot, err_min, target_fitness,
+                  mut_prob, weight_limit, mutation_multiplyer):
 
     population = list()
     count_generations = 0
@@ -418,14 +420,14 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
     best_fitness_plt = np.zeros(generations)
 
 
-    initialize_population(population, num_individuos, rede, rnd_seed)
+    initialize_population(population, num_individuos, rede, rnd_seed, weight_limit)
     best_ind = get_best_ind(population, 0)
 
-
-    while(best_ind.fitness < target_fitness and count_generations < generations):
+    acert = 0
+    while(best_ind.fitness < target_fitness and count_generations < generations ):
 
         count_generations += 1
-        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
+        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}, Acertividade: {acert}%')
         population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed)
 
         fitness_list = get_fitness_list(population)
@@ -447,7 +449,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
             #print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
             #      f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
 
-            kids = crossover(parent1, parent2, mut_prob)
+            kids = crossover(parent1, parent2, mut_prob, mutation_multiplyer)
 
             #mutate(kids,mutation_probability)
 
@@ -457,13 +459,14 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset, num_indivi
 
             remove_individual(population, [parent1.id, parent2.id])
         population = next_gen
-
+        acert = teste_acertividade(test_dataset, num_classes, best_ind)
     if watchdog > 1000:
         print('Exit by watchdog.')
     elif count_generations >= generations:
         print('Exit by end of generations.')
 
     print(f'Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
+    print(f'Acertividade: {acert}%')
         # salvar indivídio
     print('End of Training')
     return best_ind, best_fitness_plt, fitness_list, count_generations
@@ -484,13 +487,13 @@ def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_s
             acert = calculate_fitness(test_dataset,population[nind],int(num_classes))
             population[nind].set_fitness(acert)
 
-def initialize_population(population, num_individuos, rede, rnd_seed):
+def initialize_population(population, num_individuos, rede, rnd_seed, weight_limit):
     for ni in range(0, num_individuos):
         population.append(rede_neural(rede.L, rede.m, rede.a, rede.b))
-        population[-1].initialize_weights_random(ni + rnd_seed)
+        population[-1].initialize_weights_random(random_seed=ni + rnd_seed, weight_limit= weight_limit)
         population[-1].id = ni
 
-def crossover(parent1, parent2,prob_mut):
+def crossover(parent1, parent2,prob_mut, mutation_multiplyer):
     son1 = rede_neural(parent1.L, parent1.m, parent1.a, parent1.b)
     son2 = rede_neural(parent2.L, parent2.m, parent2.a, parent2.b)
 
@@ -498,8 +501,8 @@ def crossover(parent1, parent2,prob_mut):
 
         for j in range(0,parent1.m[l+1]):
             prob = np.random.randint(2)
-            weight_mult1 = get_weight_multiplier(prob_mut)
-            weight_mult2 = get_weight_multiplier(prob_mut)
+            weight_mult1 = get_weight_multiplier(prob_mut, mutation_multiplyer)
+            weight_mult2 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             for w in range(0,parent1.m[l]+1):
 
 
@@ -527,10 +530,11 @@ def get_mutation_permission(probability):
         result = True
     return result
 
-def get_weight_multiplier(mutation_prob):
+def get_weight_multiplier(mutation_prob, mutation_multiplyer):
     weight_mult1 = 0.
+    signal = -1 + 2 * np.random.randint(2)
     if get_mutation_permission(mutation_prob):
-        weight_mult1 = 0.5
+        weight_mult1 = mutation_multiplyer * signal
     return weight_mult1
 
 
