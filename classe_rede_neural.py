@@ -69,12 +69,19 @@ class rede_neural():
 
         columns = pd.MultiIndex.from_tuples(tuples, names=['Layer:', 'Neuron:'])
         df = pd.DataFrame(data=data, columns=columns)
-
+        #print(df)
         for l in range(0, self.L):
-            temp_l = np.transpose(self.l[l].w)
-            # print(df.loc[0:self.m[l] + 1, l + 1])
-            df.loc[0:self.m[l] + 1, l + 1] = temp_l
+            for n in range(0, self.m[l+1]):
+                temp_l = np.transpose(self.l[l].w[n])
+                # temp_l = np.transpose(temp_l)
+                # print(f'camada={l}, neurônio={n}')
+                # print(temp_l)
+                # print(df.loc[0:self.m[l], l+1].loc[:,n])
+                # print(df.loc[0:self.m[l] + 1, l + 1])
+                df.loc[0:self.m[l], l + 1].loc[:, n] = temp_l
+                #df.loc[0:self.m[l] + 1, l + 1] = temp_l
 
+        #exit()
         data2 = np.zeros((len(self.m), 4))
         data2[:] = np.nan
         df2 = pd.DataFrame(data=data2, columns=['L', 'm', 'a', 'b'])
@@ -384,10 +391,13 @@ def calculate_fitness(test_dataset, neural_network, num_classes):
     err_avg = err_avg / n_inst
     b = 1 + 1 / (1 + np.exp(2))
     c = -2
-    d = 2
+    f = 2
     a = -1
-    result = b + a / (1 + np.exp(-d * err_avg - c))
+    result = b + a / (1 + np.exp(-f * err_avg - c))
     return result
+
+
+
 
 def teste_neural_network(test_dataset, neural_network):
     cont_acert = 0
@@ -412,7 +422,7 @@ def teste_neural_network(test_dataset, neural_network):
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
-                  mut_prob, weight_limit, mutation_multiplyer):
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters):
 
     population = list()
     count_generations = 0
@@ -427,14 +437,13 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     while(best_ind.fitness < target_fitness and count_generations < generations ):
 
         count_generations += 1
-        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}, Acertividade: {acert}%')
-        population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed)
+        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}')#, Acertividade: {acert}%')
+        population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed, count_generations, best_ind.fitness)
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
-        k = 5
+        k = k_tournament_fighters
 
-        elitism = 2
 
         next_gen = list()
         apply_elitism(population, next_gen, elitism)
@@ -459,7 +468,8 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
             remove_individual(population, [parent1.id, parent2.id])
         population = next_gen
-        acert = teste_acertividade(test_dataset, num_classes, best_ind)
+
+    acert = teste_acertividade(test_dataset, num_classes, best_ind)
     if watchdog > 1000:
         print('Exit by watchdog.')
     elif count_generations >= generations:
@@ -471,26 +481,46 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     print('End of Training')
     return best_ind, best_fitness_plt, fitness_list, count_generations
 
-def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed):
+def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed, generation, best_fitness):
     num_individuos = len(population)
     n_inst = len(dataset.index)
+    b = 1 + 1 / (1 + np.exp(2))
+    c = -2
+    f = 2
+    a = -1
+
+    dn = int(n_inst / num_individuos)
+
     for nind in range(0, num_individuos):
         dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
-        for ni in range(0, n_inst):
-            x = list(dataset_shufle.iloc[ni, 1:(rede.m[0] + 1)])
-            output_value = int(dataset_shufle.iloc[ni, 0])
-            # d = [dataset_shufle.iloc[ni, 0]]
-            #d = output_layer_activation(output_value=output_value, num_classes=num_classes)
-            population[nind].forward_propagation(x=x)
-            # print(f'individuo {nind}, Y={population[nind].l[rede.L-1].y}')
-            #acert = teste_acertividade(test_dataset, int(num_classes), population[nind])/100
-            acert = calculate_fitness(test_dataset,population[nind],int(num_classes))
-            population[nind].set_fitness(acert)
+
+        inst_inicial = nind * dn
+        inst_final = inst_inicial + dn - 1
+
+        acert = calculate_fitness(dataset_shufle,population[nind],int(num_classes))
+        #acert = calculate_fitness(dataset_shufle[inst_inicial:inst_final], population[nind], int(num_classes))
+
+
+
+        print(f'Geração: {generation}, Individuo: {nind}, fitness: {acert}, best_fitness: {best_fitness}')
+
+
+        population[nind].set_fitness(acert)
+
+
+        #acert = b + a / (1 + np.exp(-f * err_avg - c))
+        #population[nind].set_fitness(acert)
 
 def initialize_population(population, num_individuos, rede, rnd_seed, weight_limit):
+
     for ni in range(0, num_individuos):
-        population.append(rede_neural(rede.L, rede.m, rede.a, rede.b))
-        population[-1].initialize_weights_random(random_seed=ni + rnd_seed, weight_limit= weight_limit)
+        if ni == 0:
+            population.append(rede)
+            if rede.weights_initialized == False:
+                population[-1].initialize_weights_random(random_seed=ni + rnd_seed, weight_limit=weight_limit)
+        else:
+            population.append(rede_neural(rede.L, rede.m, rede.a, rede.b))
+            population[-1].initialize_weights_random(random_seed=ni + rnd_seed, weight_limit= weight_limit)
         population[-1].id = ni
 
 def crossover(parent1, parent2,prob_mut, mutation_multiplyer):
@@ -532,9 +562,11 @@ def get_mutation_permission(probability):
 
 def get_weight_multiplier(mutation_prob, mutation_multiplyer):
     weight_mult1 = 0.
-    signal = -1 + 2 * np.random.randint(2)
+    #signal = -1 + 2 * np.random.randint(2)
+    n_rand = -mutation_multiplyer + 2 * mutation_multiplyer * np.random.rand()
     if get_mutation_permission(mutation_prob):
-        weight_mult1 = mutation_multiplyer * signal
+        #weight_mult1 = mutation_multiplyer * n_rand
+        weight_mult1 = n_rand
     return weight_mult1
 
 

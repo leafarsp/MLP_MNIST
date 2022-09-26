@@ -8,19 +8,18 @@ import datetime as dt
 
 def main():
     L = 2
-    m = [2, 2, 2]
+    m = [2, 4, 2]
     a = [0.9, 0.9]
     b = [0.5,0.5]
     #b = [2 / 3, 2 / 3, 2 / 3]
-
-    num_classes = 2
-
     a1 = nnc.rede_neural(L, m, a, b)
+
+    #a1 = nnc.load_neural_network('Xor_Genetic.xlsx')
+
+    #a1.initialize_weights_random(rnd_seed)
+
     rnd_seed = 10
-
-    a1.initialize_weights_random(rnd_seed)
-
-
+    num_classes = 2
 
     data = {'y': [0, 1, 1, 0], 'x1': [-1, -1, 1, 1], 'x2': [-1, 1, -1, 1]}
 
@@ -30,19 +29,22 @@ def main():
     test_dataset = dataset
 
 
-    num_individuos = 1000
-    generations = 2000
+    num_individuos = 100
+    generations = 100
     step_plot = 10
     err_min = 0.1
-    target_fitness = 0.95
-    mut_prob = 0.2
-    mutation_multiplyer = 1.
+    target_fitness = 0.9
+    mut_prob = 0.3
+    mutation_multiplyer = 4.
     weight_limit = 10.
+    elitism = 5
+    k = 5
     #a1.initialize_weights_random()
+
 
     a1, best_fitness_plt, fitness_list, count_generations = nnc.train_genetic(
         a1, num_classes, rnd_seed, dataset,test_dataset, num_individuos, generations,
-        step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer)
+        step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer, elitism, k)
     fitness_list.to_excel('fitness_list.xlsx')
 
     a1.save_neural_network("Xor_Genetic.xlsx")
