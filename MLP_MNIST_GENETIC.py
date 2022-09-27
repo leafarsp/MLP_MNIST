@@ -6,8 +6,8 @@ import cv2 as cv2
 
 
 
-def main():
 
+def main():
 
 
   L = 2
@@ -17,19 +17,21 @@ def main():
   #b = [2 / 3, 2 / 3, 2 / 3]
   a1 = nnc.rede_neural(L, m, a, b)
 
+  #a1 = nnc.load_neural_network('MNIST_Genetic2.xlsx')
+
   rnd_seed = 10
   num_classes = 10
 
   num_individuos = 100
-  generations = 100
+  generations = 1000
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.9
   mut_prob = 0.3
   mutation_multiplyer = 4.
-  weight_limit = 10.
-  elitism = 5
-  k = 5
+  weight_limit = 2.
+  elitism = 10
+  k = 15
 
 
   # Base de dados de treinamento
@@ -54,14 +56,16 @@ def main():
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
 
   dataset.head()
+  population = None #nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede = a1)
 
-  a1, best_fitness_plt, fitness_list, count_generations = nnc.train_genetic(
+  a1, best_fitness_plt, fitness_list, count_generations,population = nnc.train_genetic(
       a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations,
-      step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer, elitism, k)
+      step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer, elitism, k, population)
   fitness_list.to_excel('fitness_list.xlsx')
 
-  a1.save_neural_network("Xor_Genetic.xlsx")
+  a1.save_neural_network("Best_MNIST_Genetic.xlsx")
 
+  nnc.save_population(population=population, filename=f'MNIST_genetic\\MNIST_genetic')
   # print(f'\na1.l[l].w=\n{a1.l[1].w}')
 
   #plt_results(a1, a1plt, Eav, dataset, n, acert)
@@ -72,7 +76,7 @@ def main():
   print(f'erro:{err}')
 
   acertividade = teste_acertividade(dataset, a1)
-  a1.save_neural_network('neural_network2.xlsx')
+  #a1.save_neural_network('neural_network2.xlsx')
 
   buttonPressed = False
   while not buttonPressed:

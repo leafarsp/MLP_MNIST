@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import datetime as dt
+import logging
+import threading
+import time
 
 class layer():
     def __init__(self, m, m_ant):
@@ -24,6 +27,7 @@ class rede_neural():
         self.l = list()
         self.weights_initialized = False
         self.fitness = 0
+        self.generation = 0
         for i in range(0, L):
             self.l.append(layer(m[i + 1], m[i]))
 
@@ -150,6 +154,12 @@ class rede_neural():
 
     def get_fitness(self):
         return self.fitness
+
+    def get_generation(self):
+        return self.generation
+
+    def set_generation(self, generation):
+        self.generation = generation
 
     def get_id(self):
         return self.id
@@ -394,7 +404,8 @@ def calculate_fitness(test_dataset, neural_network, num_classes):
     f = 2
     a = -1
     result = b + a / (1 + np.exp(-f * err_avg - c))
-    return result
+    neural_network.set_fitness(result)
+    #return result
 
 
 
@@ -422,23 +433,25 @@ def teste_neural_network(test_dataset, neural_network):
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
-                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters):
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, population=None):
 
-    population = list()
+
     count_generations = 0
     watchdog = 0
     best_fitness_plt = np.zeros(generations)
 
-
-    initialize_population(population, num_individuos, rede, rnd_seed, weight_limit)
+    if population == None:
+        population = list()
+        initialize_population(population, num_individuos, rede, rnd_seed, weight_limit)
     best_ind = get_best_ind(population, 0)
 
     acert = 0
     while(best_ind.fitness < target_fitness and count_generations < generations ):
 
         count_generations += 1
-        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}')#, Acertividade: {acert}%')
-        population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed, count_generations, best_ind.fitness)
+        print(f'count_generations={count_generations}, Best individual: {best_ind.id}, fitness:{best_ind.fitness}, Acertividade: {acert}%')
+        population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed,
+                        count_generations, best_ind, acert)
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
@@ -465,11 +478,13 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
             for kid in kids:
                 next_gen.append(kid)
                 next_gen[-1].id = len(next_gen)-1
+                next_gen[-1].set_generation(count_generations)
 
             remove_individual(population, [parent1.id, parent2.id])
         population = next_gen
-
-    acert = teste_acertividade(test_dataset, num_classes, best_ind)
+        if count_generations % 5 == 0 or count_generations == 1:
+            print(f'Testando acertividade do melhor indivíduo')
+            acert = teste_acertividade(test_dataset, num_classes, best_ind)
     if watchdog > 1000:
         print('Exit by watchdog.')
     elif count_generations >= generations:
@@ -479,9 +494,51 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     print(f'Acertividade: {acert}%')
         # salvar indivídio
     print('End of Training')
-    return best_ind, best_fitness_plt, fitness_list, count_generations
+    return best_ind, best_fitness_plt, fitness_list, count_generations, population
 
-def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed, generation, best_fitness):
+def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_seed, generation, best_ind,acertividade):
+
+
+    num_individuos = len(population)
+    n_inst = len(dataset.index)
+    b = 1 + 1 / (1 + np.exp(2))
+    c = -2
+    f = 2
+    a = -1
+
+    thread_list = list()
+    for nind in range(0, num_individuos):
+        dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+
+
+
+        #acert = calculate_fitness(dataset_shufle,population[nind],int(num_classes))
+        thread_list.append(threading.Thread(target=calculate_fitness, args=(dataset_shufle[:], population[nind], int(num_classes))))
+
+    for nind in range(0, num_individuos):
+        thread_list[nind].start()
+
+    for nind in range(0, num_individuos):
+        thread_list[nind].join()
+
+
+        # print(f'Geração: {generation:04d}, Individuo: {nind:04d}, fitness: {acert:.7f}, '
+        #       f'best_ind_generation = {best_ind.get_generation():04d}, best_fitness: '
+        #       f'{best_ind.fitness:.7f}, best_acertividade: {acertividade:.3f}%')
+
+
+        # population[nind].set_fitness(acert)
+
+
+        #acert = b + a / (1 + np.exp(-f * err_avg - c))
+        #population[nind].set_fitness(acert)
+
+
+def population_play_concurent(dataset, test_dataset, num_classes, population, rede, rnd_seed, generation, best_ind, acertividade):
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+
     num_individuos = len(population)
     n_inst = len(dataset.index)
     b = 1 + 1 / (1 + np.exp(2))
@@ -500,16 +557,14 @@ def population_play(dataset, test_dataset, num_classes, population,  rede, rnd_s
         acert = calculate_fitness(dataset_shufle,population[nind],int(num_classes))
         #acert = calculate_fitness(dataset_shufle[inst_inicial:inst_final], population[nind], int(num_classes))
 
-
-
-        print(f'Geração: {generation}, Individuo: {nind}, fitness: {acert}, best_fitness: {best_fitness}')
-
+        print(f'Geração: {generation:04d}, Individuo: {nind:04d}, fitness: {acert:.7f}, '
+              f'best_ind_generation = {best_ind.get_generation():04d}, best_fitness: '
+              f'{best_ind.fitness:.7f}, best_acertividade: {acertividade:.3f}%')
 
         population[nind].set_fitness(acert)
 
-
-        #acert = b + a / (1 + np.exp(-f * err_avg - c))
-        #population[nind].set_fitness(acert)
+        # acert = b + a / (1 + np.exp(-f * err_avg - c))
+        # population[nind].set_fitness(acert)
 
 def initialize_population(population, num_individuos, rede, rnd_seed, weight_limit):
 
@@ -680,3 +735,18 @@ def remove_individual(population, id_list):
             if ind.id == ind_remove:
                 population.remove(ind)
                 break
+
+def save_population(population,filename):
+    for i in range(0,len(population)):
+        print(f'Saving population {i:04d}/{len(population):04d}')
+        population[i].save_neural_network(filename=f'{filename}_{i:04d}.xlsx')
+
+def load_population(filename, num_individuos, rede):
+    population = list()
+
+    for i in range(0, num_individuos):
+        print(f'Loading population {i:04d}/{num_individuos:04d}')
+        population.append(load_neural_network(f'{filename}_{i:04d}.xlsx'))
+        population[-1].id = i
+
+    return population
