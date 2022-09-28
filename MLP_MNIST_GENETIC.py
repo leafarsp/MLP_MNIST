@@ -23,44 +23,65 @@ def main():
   num_classes = 10
 
   num_individuos = 100
-  generations = 1000
+  generations = 30
+  dataset_division = 70
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.9
   mut_prob = 0.3
   mutation_multiplyer = 4.
   weight_limit = 2.
-  elitism = 10
-  k = 15
+  elitism = 2
+  k = 10
 
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede = a1)
 
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
   # dataset = pd.read_csv('mnist_test.csv')
+  print(f'Loading dataset')
   dataset = pd.read_csv('mnist_train_small.csv')
 
 
   #Filtrando apenas o número 1
   # dataset = dataset.loc[dataset['7'] == 1]
   #dataset = dataset[dataset['6'].isin([1,2,3,4,5,6,7,8,9,0])]
-
+  print(f'Adapting dataset')
   dataset = dataset.iloc[0:]
 
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
 
-
+  print(f'Loading and adapting test dataset')
   test_dataset = pd.read_csv('mnist_test.csv')
   test_dataset = test_dataset.iloc[0:]
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
 
   dataset.head()
-  population = None #nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede = a1)
+
 
   a1, best_fitness_plt, fitness_list, count_generations,population = nnc.train_genetic(
-      a1, num_classes, rnd_seed, dataset, test_dataset, num_individuos, generations,
-      step_plot, err_min, target_fitness, mut_prob, weight_limit, mutation_multiplyer, elitism, k, population)
+    rede=a1,
+    num_classes=num_classes,
+    rnd_seed=rnd_seed,
+    dataset=dataset,
+    test_dataset=test_dataset,
+    num_individuos=num_individuos,
+    generations=generations,
+    step_plot=step_plot,
+    err_min=err_min,
+    target_fitness=target_fitness,
+    mut_prob=mut_prob,
+    weight_limit=weight_limit,
+    mutation_multiplyer=mutation_multiplyer,
+    elitism=elitism,
+    k_tournament_fighters=k,
+    dataset_division=dataset_division,
+    population=population)
+
+
+
   fitness_list.to_excel('fitness_list.xlsx')
 
   a1.save_neural_network("Best_MNIST_Genetic.xlsx")
