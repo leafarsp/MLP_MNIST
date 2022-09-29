@@ -19,17 +19,17 @@ def main():
 
   #a1 = nnc.load_neural_network('MNIST_Genetic2.xlsx')
 
-  rnd_seed = 10
+  rnd_seed = np.random.randint(65535)
   num_classes = 10
 
   num_individuos = 100
-  generations = 30
-  dataset_division = 70
+  generations = 100
+  dataset_division = 50
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.9
   mut_prob = 0.3
-  mutation_multiplyer = 4.
+  mutation_multiplyer = 6.
   weight_limit = 2.
   elitism = 2
   k = 10

@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 
+
 class layer():
     def __init__(self, m, m_ant):
         self.w = np.ones((m, m_ant + 1))
@@ -23,11 +24,13 @@ class rede_neural():
         self.m = m
         self.a = a
         self.b = b
-        self.id = 0
+        self.id = 0.
         self.l = list()
         self.weights_initialized = False
         self.fitness = 0
+        self.acertividade = 0
         self.generation = 0
+        self.flag_test_acertividade = False
         for i in range(0, L):
             self.l.append(layer(m[i + 1], m[i]))
 
@@ -155,6 +158,17 @@ class rede_neural():
     def get_fitness(self):
         return self.fitness
 
+    def set_acertividade(self, acertividade):
+        self.acertividade = acertividade
+        self.flag_test_acertividade = True
+
+    def get_acertividade(self):
+        return self.acertividade
+
+    def get_flag_teste_acertividade(self):
+        return self.flag_test_acertividade
+
+
     def get_generation(self):
         return self.generation
 
@@ -183,6 +197,8 @@ class rede_neural():
         clone.set_fitness(self.get_fitness())
         clone.set_generation(self.get_generation())
         clone.set_id(self.get_id())
+        clone.acertividade = self.get_acertividade()
+        clone.flag_test_acertividade = self.get_flag_teste_acertividade()
         for l in range(0, self.L):
             for j in range(0, self.m[l + 1]):
                 for w in range(0, self.m[l] + 1):
@@ -306,7 +322,9 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
     # início do treinamento
     start_time_epoch = dt.datetime.now()
     for ne in range(0, n_epoch):
+
         dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+        rnd_seed += 1
         e_epoch = 0
 
         for ni in range(0, n_inst):
@@ -455,6 +473,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
     logging.info(f'Starting training')
+    local_rnd_seed = rnd_seed
     count_generations = 0
     watchdog = 0
     best_fitness_plt = np.zeros(generations)
@@ -465,14 +484,23 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     best_ind = get_best_ind(population, 0)
 
     acert = 0
+    start_time = time.time()
+    end_time = time.time()
+    elapsed_time = 0
     while(best_ind.fitness < target_fitness and count_generations < generations ):
-
+        elapsed_time = end_time - start_time
+        start_time = time.time()
         count_generations += 1
-        print(f'count_generations={count_generations:04d}, Best individual: {best_ind.id:04d}, '
+        print(f'count_generations={count_generations:04d}/{generations:04d}, Best individual: {best_ind.id:04d}, '
               f'Best individual generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.7f}, '
-              f'Acertividade: {acert:.7f}%')
-        population_play_concurent(dataset, test_dataset, num_classes, population,  rede, rnd_seed,
-                        count_generations, best_ind, acert, dataset_division)
+              f'Acertividade: {best_ind.get_acertividade():.7f}%, generation_time: {elapsed_time:.3f}')
+        population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
+                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+        # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
+        #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+
+        local_rnd_seed += 1
+
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
@@ -481,7 +509,13 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
         next_gen = list()
         apply_elitism(population, next_gen, elitism)
-        best_ind = get_best_ind(population, 0)
+        best_ind = get_best_ind(next_gen, 0)
+
+        if best_ind.get_flag_teste_acertividade() != True :
+            print(f'Testando acertividade do melhor indivíduo')
+            acert = teste_acertividade(test_dataset, num_classes, best_ind)
+            best_ind.set_acertividade(acert)
+
         best_fitness_plt[count_generations - 1] = best_ind.fitness
         watchdog=0
         while (len(population) > elitism) and watchdog < 1000:
@@ -503,9 +537,13 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
             remove_individual(population, [parent1.id, parent2.id])
         population = next_gen
-        if count_generations % 5 == 0 or count_generations == 1:
-            print(f'Testando acertividade do melhor indivíduo')
-            acert = teste_acertividade(test_dataset, num_classes, best_ind)
+        # if count_generations % 5 == 0 or count_generations == 1:
+
+
+
+
+        end_time = time.time()
+
     if watchdog > 1000:
         print('Exit by watchdog.')
     elif count_generations >= generations:
@@ -528,7 +566,6 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
 
     num_individuos = len(population)
     n_inst = len(dataset.index)
-    dn = int(n_inst / num_individuos)
 
 
 
@@ -557,7 +594,7 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
         #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
         thread_list.append(threading.Thread(target=calculate_fitness,
                                             args=(dataset_shufle[inst_inicial:inst_final], population[nind],
-                                                  (num_classes), nind)))
+                                                  num_classes, nind)))
 
     for nind in range(0, num_individuos):
         thread_list[nind].start()
@@ -565,13 +602,14 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
     for nind in range(0,num_individuos):
         thread_list[nind].join()
 
-    for nind in range(0, num_individuos):
-        logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
-              f'fitness: {population[nind].get_fitness()}\n')
+    # for nind in range(0, num_individuos):
+    #     logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
+    #           f'fitness: {population[nind].get_fitness()}\n')
 
 
 
-def population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed, generation, best_ind, acertividade):
+def population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed, generation, best_ind,
+                    acertividade, dataset_division = 1):
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
@@ -585,23 +623,36 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
 
     dn = int(n_inst / num_individuos)
 
+    max_inst_by_ind = int(n_inst / (num_individuos - 1))
+    if dataset_division > (max_inst_by_ind-1):
+        dataset_division = int(max_inst_by_ind - 1)
+
+    inst_by_ind = int(n_inst / dataset_division)
+    dist = int(inst_by_ind - max_inst_by_ind)
+
     for nind in range(0, num_individuos):
         dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
 
-        inst_inicial = nind * dn
-        inst_final = inst_inicial + dn - 1
+        # inst_inicial = nind * dn
+        # inst_final = inst_inicial + dn - 1
 
-        acert = calculate_fitness(dataset_shufle,population[nind],int(num_classes))
+        inst_inicial = int((n_inst - dist) / (num_individuos - 1)) * nind
+        inst_final = int(inst_inicial + inst_by_ind - 1)
+
+        calculate_fitness(dataset_shufle[inst_inicial:inst_final],population[nind],int(num_classes))
         #acert = calculate_fitness(dataset_shufle[inst_inicial:inst_final], population[nind], int(num_classes))
 
-        print(f'Geração: {generation:04d}, Individuo: {nind:04d}, fitness: {acert:.7f}, '
-              f'best_ind_generation = {best_ind.get_generation():04d}, best_fitness: '
-              f'{best_ind.fitness:.7f}, best_acertividade: {acertividade:.3f}%')
+        # print(f'Geração: {generation:04d}, Individuo: {nind:04d}, fitness: {acert:.7f}, '
+        #       f'best_ind_generation = {best_ind.get_generation():04d}, best_fitness: '
+              # f'{best_ind.fitness:.7f}, best_acertividade: {acertividade:.3f}%')
 
-        population[nind].set_fitness(acert)
+        # population[nind].set_fitness(acert)
 
         # acert = b + a / (1 + np.exp(-f * err_avg - c))
         # population[nind].set_fitness(acert)
+    for nind in range(0, num_individuos):
+        logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
+              f'fitness: {population[nind].get_fitness()}\n')
 
 def initialize_population(population, num_individuos, rede, rnd_seed, weight_limit):
 
@@ -678,7 +729,7 @@ def get_fitness_list(population):
     return dataset
 
 def apply_elitism(population, next_gen, elitism):
-    # Não está funcionando ainda, apenas para poder testar as outras funções
+
     for i in range(0,elitism):
         best_ind = get_best_ind(population=population,  rank=i)
         best_ind_clone = best_ind.clone()
