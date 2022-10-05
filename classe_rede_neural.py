@@ -342,7 +342,8 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
             if n >= step_plot:
                 if n % step_plot == 0:
-                    acert.append(teste_acertividade(test_dataset, int(num_classes), a1))
+                    teste_acertividade(test_dataset, int(num_classes), a1)
+                    acert.append(a1.get_acertividade())
                     elapsed_time = dt.datetime.now() - start_time_epoch
                     start_time_epoch = dt.datetime.now()
                     estimated_time_end = start_time_epoch + elapsed_time * (N // step_plot - n_cont)
@@ -397,21 +398,28 @@ def output_layer_activation(output_value, num_classes):
 
 def teste_acertividade(test_dataset, num_classes, neural_network):
     cont_acert = 0
-    for i in range(0, len(test_dataset)):
+    if neural_network.get_flag_teste_acertividade() == False:
+        for i in range(0, len(test_dataset)):
 
-        num_real = test_dataset.iloc[i, 0]
-        x = list(test_dataset.iloc[i, 1:])
+            num_real = test_dataset.iloc[i, 0]
+            x = list(test_dataset.iloc[i, 1:])
 
-        y = neural_network.forward_propagation(x)
+            y = neural_network.forward_propagation(x)
 
-        num_rede = neural_network.get_output_class()
+            num_rede = neural_network.get_output_class()
 
-        if num_rede != np.nan:
-            if (num_real == num_rede):
-                cont_acert += 1
+            if num_rede != np.nan:
+                if (num_real == num_rede):
+                    cont_acert += 1
 
-    return 100 * cont_acert / len(test_dataset)
-
+        result = 100 * cont_acert / len(test_dataset)
+        # print(f'Acertividade: {result}')
+        neural_network.set_acertividade(result)
+    # else:
+    #     print(f'ind unique ID: {neural_network.uniqueId}, Acertividade já testada')
+    # return result
+# TODO: Verificar porque as vezes redes neurais de gerações diferentes, testando dados diferentes, retornam o
+#  mesmo fitness. Pode ser que os dados não estejam sendo embaralhados corretamente.
 def calculate_fitness(test_dataset, rede, num_classes, name=0):
     # logging.info("Thread %s: starting", name)
 
@@ -507,15 +515,16 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         start_time = time.time()
         count_generations += 1
         # print(f'\nGeneration:{count_generations}\n')
+
+        population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
+                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+        # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
+        #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+
         print(f'count_generations={count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
               f' best uniqueID: {best_ind.uniqueId} '
               f'Best generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
               f'Acertividade: {best_ind.get_acertividade():.7f}%, generation_time: {elapsed_time:.3f}')
-        # population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
-        #                 count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
-        population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
-                                  count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
-
         local_rnd_seed += 1
 
 
@@ -532,16 +541,16 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
 
 
-        # print(f'Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}')
-        if best_ind.get_flag_teste_acertividade() != True:
-            print(f'Testando acertividade do melhor indivíduo, ger. {best_ind.get_generation()}, '
-                  f'ind1.uniqueID: {best_ind.uniqueId}, id {best_ind.get_id()}')
-            # test_dataset_shufle = test_dataset.sample(frac=1, random_state=rnd_seed, axis=0)
-            # test_dataset_shufle = test_dataset_shufle.iloc[0:int(len(test_dataset.index) / 10)]
-            acert = teste_acertividade(test_dataset, num_classes, best_ind)
-            best_ind.set_acertividade(acert)
-            print(f'Acertividade: {best_ind.get_acertividade():.7f}%'
-                  f' best_ind.uniqueID: {best_ind.uniqueId}, best id: {best_ind.get_id()}')
+        # # print(f'Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}')
+        # if best_ind.get_flag_teste_acertividade() != True:
+        #     print(f'Testando acertividade do melhor indivíduo, ger. {best_ind.get_generation()}, '
+        #           f'ind1.uniqueID: {best_ind.uniqueId}, id {best_ind.get_id()}')
+        #     # test_dataset_shufle = test_dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+        #     # test_dataset_shufle = test_dataset_shufle.iloc[0:int(len(test_dataset.index) / 10)]
+        #     teste_acertividade(test_dataset, num_classes, best_ind)
+        #     # best_ind.set_acertividade(acert)
+        #     print(f'Acertividade: {best_ind.get_acertividade():.7f}%'
+        #           f' best_ind.uniqueID: {best_ind.uniqueId}, best id: {best_ind.get_id()}')
 
         # print(f'best_ind.fitness={best_ind.get_fitness():.10f} best_ind.uniqueID: {best_ind.uniqueId} '
         #       f'best_ind id: {best_ind.get_id()} Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}'
@@ -601,7 +610,7 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
 
-
+    best_clone = best_ind.clone()
 
     num_individuos = len(population)
     n_inst = len(dataset.index)
@@ -634,13 +643,17 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
         thread_list.append(threading.Thread(target=calculate_fitness,
                                             args=(dataset_shufle[inst_inicial:inst_final], population[nind],
                                                   num_classes, nind)))
-
+    best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
+    best_acert_thread.start()
     for nind in range(0, num_individuos):
         thread_list[nind].start()
 
     for nind in range(0,num_individuos):
         thread_list[nind].join()
-
+    best_acert_thread.join()
+    # print(f'best_clone.get_acertividade() = {best_clone.get_acertividade()}')
+    best_ind.set_acertividade(best_clone.get_acertividade())
+    # print(f'best_ind.get_acertividade() = {best_ind.get_acertividade()}')
     # for nind in range(0, num_individuos):
     #     logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
     #           f'fitness: {population[nind].get_fitness()}\n')
@@ -688,7 +701,7 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
               # f'{best_ind.fitness:.7f}, best_acertividade: {acertividade:.3f}%')
 
         # population[nind].set_fitness(acert)
-
+    teste_acertividade(test_dataset, int(num_classes), best_ind)
         # acert = b + a / (1 + np.exp(-f * err_avg - c))
         # population[nind].set_fitness(acert)
     # for nind in range(0, num_individuos):
