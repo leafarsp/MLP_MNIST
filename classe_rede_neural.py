@@ -25,6 +25,7 @@ class rede_neural():
         self.a = a
         self.b = b
         self.id = 0.
+        self.uniqueId = self.__hash__()
         self.l = list()
         self.weights_initialized = False
         self.fitness = 0
@@ -199,6 +200,7 @@ class rede_neural():
         clone.set_id(self.get_id())
         clone.acertividade = self.get_acertividade()
         clone.flag_test_acertividade = self.get_flag_teste_acertividade()
+        clone.uniqueId = self.uniqueId
         for l in range(0, self.L):
             for j in range(0, self.m[l + 1]):
                 for w in range(0, self.m[l] + 1):
@@ -410,24 +412,34 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
 
     return 100 * cont_acert / len(test_dataset)
 
-def calculate_fitness(test_dataset, neural_network, num_classes, name=0):
+def calculate_fitness(test_dataset, rede, num_classes, name=0):
     # logging.info("Thread %s: starting", name)
 
     err_avg = 0
     result = 0
+    punishment = 0
+    err_class = 0
+    err_nan = 0
     for i in range(0, len(test_dataset)):
 
         num_real = test_dataset.iloc[i, 0]
         x = list(test_dataset.iloc[i, 1:])
 
-        y = neural_network.forward_propagation(x)
+        y = rede.forward_propagation(x)
 
         d = output_layer_activation(num_real,num_classes)
+        num_rede = rede.get_output_class()
 
+        if num_rede != np.nan:
+            if (num_real != num_rede):
+                err_class += 1
+        else:
+            err_nan +=1
         err = d - y
 
         err_avg += np.sqrt(np.matmul(err, np.transpose(err))/len(err))
-
+    # erro de not a number é menos crítico do que o erro de classe, por isso ele é multiplicado por 0.6
+    punishment = (err_class + err_nan*0.6)/len(test_dataset)
     n_inst = len(test_dataset.index)
     err_avg = err_avg / n_inst
     b = 1 + 1 / (1 + np.exp(2))
@@ -435,7 +447,10 @@ def calculate_fitness(test_dataset, neural_network, num_classes, name=0):
     f = 2
     a = -1
     result = b + a / (1 + np.exp(-f * err_avg - c))
-    neural_network.set_fitness(result)
+    result *= (1- punishment)
+    if result <= 0:
+        result = 0.000000001
+    rede.set_fitness(result)
     # logging.info(f'Individual: {neural_network[nind].get_id()}, Generation: {neural_network[nind].neural_network()}, '
     #              f'fitness: {neural_network[nind].get_fitness()}\n')
     # print(f'Individual: {neural_network.get_id()}, Generation: {neural_network.get_generation()}, fitness: {neural_network.get_fitness()}\n')
@@ -491,52 +506,76 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         elapsed_time = end_time - start_time
         start_time = time.time()
         count_generations += 1
-        print(f'count_generations={count_generations:04d}/{generations:04d}, Best individual: {best_ind.id:04d}, '
-              f'Best individual generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.7f}, '
+        # print(f'\nGeneration:{count_generations}\n')
+        print(f'count_generations={count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
+              f' best uniqueID: {best_ind.uniqueId} '
+              f'Best generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
               f'Acertividade: {best_ind.get_acertividade():.7f}%, generation_time: {elapsed_time:.3f}')
-        population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
-                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
-        # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
-        #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+        # population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
+        #                 count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+        population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
+                                  count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
 
         local_rnd_seed += 1
 
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
-        k = k_tournament_fighters
+        # for ind1 in population:
+        #     print(f'ind1.uniqueID: {ind1.uniqueId}, ind1.fitness={ind1.get_fitness():.10f}'
+        #           f' ind1.id = {ind1.get_id()}')
+
+        best_ind = get_best_ind(population, 0)
+        # print(f'\nbest_ind.uniqueID: {best_ind.uniqueId}, best_ind.fitness={best_ind.get_fitness():.10f} '
+        #       f'best_ind id: {best_ind.get_id()} Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}'
+        #       f' Acertividade: {best_ind.get_acertividade():.7f}%')
 
 
-        next_gen = list()
-        apply_elitism(population, next_gen, elitism)
-        best_ind = get_best_ind(next_gen, 0)
 
-        if best_ind.get_flag_teste_acertividade() != True :
-            print(f'Testando acertividade do melhor indivíduo')
+        # print(f'Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}')
+        if best_ind.get_flag_teste_acertividade() != True:
+            print(f'Testando acertividade do melhor indivíduo, ger. {best_ind.get_generation()}, '
+                  f'ind1.uniqueID: {best_ind.uniqueId}, id {best_ind.get_id()}')
+            # test_dataset_shufle = test_dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+            # test_dataset_shufle = test_dataset_shufle.iloc[0:int(len(test_dataset.index) / 10)]
             acert = teste_acertividade(test_dataset, num_classes, best_ind)
             best_ind.set_acertividade(acert)
+            print(f'Acertividade: {best_ind.get_acertividade():.7f}%'
+                  f' best_ind.uniqueID: {best_ind.uniqueId}, best id: {best_ind.get_id()}')
 
-        best_fitness_plt[count_generations - 1] = best_ind.fitness
-        watchdog=0
-        while (len(population) > elitism) and watchdog < 1000:
-            watchdog += 1
+        # print(f'best_ind.fitness={best_ind.get_fitness():.10f} best_ind.uniqueID: {best_ind.uniqueId} '
+        #       f'best_ind id: {best_ind.get_id()} Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}'
+        #       f' Acertividade: {best_ind.get_acertividade():.7f}%')
 
-            parent1, parent2 = k_tournament(population=population,k=5)
 
-            #print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
-            #      f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+        if count_generations < (generations-1):
+            next_gen = list()
+            apply_elitism(population, next_gen, elitism)
 
-            kids = crossover(parent1, parent2, mut_prob, mutation_multiplyer)
 
-            #mutate(kids,mutation_probability)
 
-            for kid in kids:
-                next_gen.append(kid)
-                next_gen[-1].id = len(next_gen)-1
-                next_gen[-1].set_generation(count_generations)
+            best_fitness_plt[count_generations - 1] = best_ind.fitness
+            watchdog=0
+            while (len(population)>elitism):
 
-            remove_individual(population, [parent1.id, parent2.id])
-        population = next_gen
+
+                parent1, parent2 = k_tournament(population=population,k=k_tournament_fighters)
+
+                #print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
+                #      f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+
+                kids = crossover(parent1, parent2, mut_prob, mutation_multiplyer)
+
+                #mutate(kids,mutation_probability)
+
+                for kid in kids:
+                    if len(next_gen) < num_individuos:
+                        next_gen.append(kid)
+                        next_gen[-1].id = len(next_gen)-1
+                        next_gen[-1].set_generation(count_generations)
+
+                remove_individual(population, [parent1.id, parent2.id])
+            population = next_gen
         # if count_generations % 5 == 0 or count_generations == 1:
 
 
@@ -571,8 +610,8 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
 
     max_inst_by_ind = int(n_inst / (num_individuos -1))
 
-    if dataset_division > (max_inst_by_ind-1):
-        dataset_division = int(max_inst_by_ind - 1)
+    if dataset_division > (num_individuos - 1):
+        dataset_division = int(num_individuos - 1)
 
     inst_by_ind = int(n_inst / dataset_division)
     dist = int(inst_by_ind - max_inst_by_ind)
@@ -624,8 +663,8 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
     dn = int(n_inst / num_individuos)
 
     max_inst_by_ind = int(n_inst / (num_individuos - 1))
-    if dataset_division > (max_inst_by_ind-1):
-        dataset_division = int(max_inst_by_ind - 1)
+    if dataset_division > (num_individuos - 1):
+        dataset_division = int(num_individuos - 1)
 
     inst_by_ind = int(n_inst / dataset_division)
     dist = int(inst_by_ind - max_inst_by_ind)
@@ -638,9 +677,11 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
 
         inst_inicial = int((n_inst - dist) / (num_individuos - 1)) * nind
         inst_final = int(inst_inicial + inst_by_ind - 1)
+        # print(f'Gen: {generation:04d}, Ind:{nind:04d}, range inst {inst_inicial}->{inst_final}/{n_inst}')
 
         calculate_fitness(dataset_shufle[inst_inicial:inst_final],population[nind],int(num_classes))
         #acert = calculate_fitness(dataset_shufle[inst_inicial:inst_final], population[nind], int(num_classes))
+
 
         # print(f'Geração: {generation:04d}, Individuo: {nind:04d}, fitness: {acert:.7f}, '
         #       f'best_ind_generation = {best_ind.get_generation():04d}, best_fitness: '
@@ -650,9 +691,9 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
 
         # acert = b + a / (1 + np.exp(-f * err_avg - c))
         # population[nind].set_fitness(acert)
-    for nind in range(0, num_individuos):
-        logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
-              f'fitness: {population[nind].get_fitness()}\n')
+    # for nind in range(0, num_individuos):
+    #     logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
+    #           f'fitness: {population[nind].get_fitness()}\n')
 
 def initialize_population(population, num_individuos, rede, rnd_seed, weight_limit):
 
@@ -714,10 +755,8 @@ def get_weight_multiplier(mutation_prob, mutation_multiplyer):
 
 
 def get_best_ind(population, rank):
-
     fitness_list = get_fitness_list(population)
     position = fitness_list.iloc[rank]['position']
-
     best_ind = get_ind(population,[position])
     return best_ind[0]
 
@@ -726,6 +765,8 @@ def get_fitness_list(population):
     for i in range(0,len(population)):
         dataset.loc[i]=[population[i].id,i,population[i].fitness]
     dataset.sort_values(by=['fitness'],ascending=False, inplace=True)
+    dataset.reset_index(inplace=True)
+    dataset.drop(columns=['index'],axis=1,inplace=True)
     return dataset
 
 def apply_elitism(population, next_gen, elitism):
@@ -735,6 +776,8 @@ def apply_elitism(population, next_gen, elitism):
         best_ind_clone = best_ind.clone()
         best_ind_clone.id = i
         next_gen.append(best_ind_clone)
+
+
 
 
 def get_ind(population, id_list):
@@ -748,10 +791,6 @@ def get_ind(population, id_list):
     for ind in population:
         if ind.id in local_list:
             inds.append(ind)
-    #if len(inds)==99:
-        #print(f'id_list={id_list}')
-
-
     return inds
 
 
@@ -766,7 +805,7 @@ def k_tournament(population, k, rnd_seed=None):
     len_population = len(population)
     fighters.append(np.random.randint(len_population))
 
-    #escolhe aleatóriamente 5 indivídios
+    #escolhe aleatóriamente k indivídios
     if k > len(population):
         k = len(population)
 
@@ -796,8 +835,6 @@ def k_tournament(population, k, rnd_seed=None):
                 parents_ids[1] = population[fighters[i]].id
                 fitness_ant = population[fighters[i]].fitness
 
-
-
     parent1, parent2 = get_ind(population, parents_ids)
     return parent1, parent2
 
@@ -818,9 +855,11 @@ def remove_individual(population, id_list):
                 break
 
 def save_population(population,filename):
+    rank = get_fitness_list(population)
     for i in range(0,len(population)):
-        print(f'Saving population {i:04d}/{len(population):04d}')
-        population[i].save_neural_network(filename=f'{filename}_{i:04d}.xlsx')
+        id = int(rank.loc[i]['id'])
+        print(f'Saving population {i:04d}/{len(population):04d}, id={id}, fitness={population[id].get_fitness():.7f}')
+        population[id].save_neural_network(filename=f'{filename}_{i:04d}.xlsx')
 
 def load_population(filename, num_individuos, rede):
     population = list()

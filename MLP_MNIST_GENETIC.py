@@ -4,12 +4,7 @@ import pandas as pd
 import classe_rede_neural as nnc
 import cv2 as cv2
 
-
-
-
 def main():
-
-
   L = 2
   m = [(28 * 28), 15, 10]
   a = [1.7, 0.9]
@@ -22,19 +17,28 @@ def main():
   rnd_seed = np.random.randint(65535)
   num_classes = 10
 
-  num_individuos = 100
+  num_individuos = 500
   generations = 100
-  dataset_division = 50
+  dataset_division = 250
   step_plot = 10
   err_min = 0.1
-  target_fitness = 0.9
-  mut_prob = 0.3
-  mutation_multiplyer = 6.
+  target_fitness = 0.95
+  mut_prob = 0.4
+  mutation_multiplyer = 20.
   weight_limit = 2.
-  elitism = 2
-  k = 10
+  elitism = 5
+  k = 5
 
-  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede = a1)
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
+  #population = None
+
+  # tam_pop_atual = len(population)
+  # if tam_pop_atual < num_individuos:
+  #   for i in range(num_individuos - tam_pop_atual):
+  #     b1 = nnc.rede_neural(L, m, a, b)
+  #     b1.initialize_weights_random(weight_limit=weight_limit)
+  #     b1.set_id(tam_pop_atual + i)
+  #     population.append(b1)
 
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
@@ -47,14 +51,14 @@ def main():
   # dataset = dataset.loc[dataset['7'] == 1]
   #dataset = dataset[dataset['6'].isin([1,2,3,4,5,6,7,8,9,0])]
   print(f'Adapting dataset')
-  dataset = dataset.iloc[0:]
+  dataset = dataset.iloc[0:100]
 
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
 
   print(f'Loading and adapting test dataset')
   test_dataset = pd.read_csv('mnist_test.csv')
-  test_dataset = test_dataset.iloc[0:]
+  test_dataset = test_dataset.iloc[0:100]
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
 
@@ -125,8 +129,6 @@ def plt_results(a1,a1plt,Eav, dataset, n, acert):
   plt.title('Erro quadrático médio por época')
   plt.show()
 
-
-
   wn0 = list()
 
   for l in range(0, a1.L):
@@ -135,15 +137,11 @@ def plt_results(a1,a1plt,Eav, dataset, n, acert):
     for l in range(0, a1.L):
       wn0[l][i] = a1plt[i].l[l].w[0]
 
-
-
   for l in range(0, a1.L):
     plt.figure(l)
     plt.plot(wn0[l])
     plt.title(f'Pesos do primeiro neurônio da camada {l}')
     plt.show()
-
-
 
   # acertividade = teste_acertividade(dataset, a1)
   # plt.figure()
@@ -153,10 +151,6 @@ def plt_results(a1,a1plt,Eav, dataset, n, acert):
   plt.show()
 
   print(f'Épocas necessárias: {n}')
-
-
-
-
 
   buttonPressed = False
   while not buttonPressed:
