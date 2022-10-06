@@ -5,6 +5,7 @@ import datetime as dt
 import logging
 import threading
 import time
+import sys
 
 
 class layer():
@@ -422,12 +423,13 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
 #  mesmo fitness. Pode ser que os dados não estejam sendo embaralhados corretamente.
 def calculate_fitness(test_dataset, rede, num_classes, name=0):
     # logging.info("Thread %s: starting", name)
-
+    n_inst = len(test_dataset.index)
     err_avg = 0
     result = 0
     punishment = 0
     err_class = 0
     err_nan = 0
+    err_count_class = [0] * (num_classes+1)
     for i in range(0, len(test_dataset)):
 
         num_real = test_dataset.iloc[i, 0]
@@ -438,26 +440,36 @@ def calculate_fitness(test_dataset, rede, num_classes, name=0):
         d = output_layer_activation(num_real,num_classes)
         num_rede = rede.get_output_class()
 
+
         if num_rede != np.nan:
             if (num_real != num_rede):
                 err_class += 1
+                err_count_class[int(num_real)] += 1
         else:
             err_nan +=1
+            err_count_class[num_classes] += 1
         err = d - y
 
         err_avg += np.sqrt(np.matmul(err, np.transpose(err))/len(err))
+
+    err_std_dev = np.std(err_count_class)
+    err_mean = np.mean(err_count_class)
+    err_max = np.max(err_count_class)
     # erro de not a number é menos crítico do que o erro de classe, por isso ele é multiplicado por 0.6
-    punishment = (err_class + err_nan*0.6)/len(test_dataset)
-    n_inst = len(test_dataset.index)
+    punishment = (err_class + err_nan*0.1) /n_inst
+    punishment *= (1 + (err_mean + err_std_dev)/n_inst)
+
+    #punishment = (err_mean + err_std_dev + err_max)/n_inst
+
+
     err_avg = err_avg / n_inst
     b = 1 + 1 / (1 + np.exp(2))
     c = -2
     f = 2
     a = -1
-    result = b + a / (1 + np.exp(-f * err_avg - c))
+    result = b + a / (1 + np.exp(-f * (err_avg) - c))
     result *= (1- punishment)
-    if result <= 0:
-        result = 0.000000001
+
     rede.set_fitness(result)
     # logging.info(f'Individual: {neural_network[nind].get_id()}, Generation: {neural_network[nind].neural_network()}, '
     #              f'fitness: {neural_network[nind].get_fitness()}\n')
@@ -601,6 +613,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     print(f'Acertividade: {acert}%')
         # salvar indivídio
     logging.info(f'End of Training')
+    best_fitness_plt[-1] = best_fitness_plt[-2]
 
     return best_ind, best_fitness_plt, fitness_list, count_generations, population
 
@@ -731,10 +744,6 @@ def crossover(parent1, parent2,prob_mut, mutation_multiplyer):
             weight_mult1 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             weight_mult2 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             for w in range(0,parent1.m[l]+1):
-
-
-
-
                 if prob==0:
                     son1.l[l].w[j][w] = parent1.l[l].w[j][w] + weight_mult1
                     son2.l[l].w[j][w] = parent2.l[l].w[j][w] + weight_mult2
@@ -830,7 +839,7 @@ def k_tournament(population, k, rnd_seed=None):
 
     fighters_sorted = [0] * k
 
-    fitness_ant = -999999
+    fitness_ant = -sys.maxsize
     parents_ids[0] = None
     # definição do pai
     pai = 0

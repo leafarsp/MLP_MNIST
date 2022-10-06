@@ -18,18 +18,18 @@ def main():
   num_classes = 10
 
   num_individuos = 250
-  generations = 100
+  generations = 200
   dataset_division = 40
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.95
   mut_prob = 0.4
-  mutation_multiplyer = 1.
+  mutation_multiplyer = 0.2
   weight_limit = 2.
   elitism = 10
   k = 10
 
-  #population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
+  # population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
   population = None
 
   # tam_pop_atual = len(population)
