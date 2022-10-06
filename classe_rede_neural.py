@@ -123,6 +123,30 @@ class rede_neural():
             input = np.append(self.l[l].y, 1)
         return self.l[self.L - 1].y
 
+    def forward_propagation_concurrent(self, x):
+        if len(x) != self.m[0]:
+            print(
+                f'Error, input vector has different size from expected. Input size= {len(x)}, Input nodes = {self.m[0]}')
+        input = np.append(x, 1)  # acrescenta 1 relativo ao bias
+        for l in range(0, self.L):
+            thread_list = list()
+            for j in range(0, self.m[l + 1]):
+                # self.l[l].v[j] = np.matmul(np.transpose(self.l[l].w[j]), input)
+                # self.l[l].y[j] = self.activation_func(self.a[l], self.b[l], self.l[l].v[j])
+                thread_list.append(threading.Thread(target=self.__compute_neuron__,args=(l, j, input)))
+                # thread_list[-1].start()
+            for j in range(0, self.m[l + 1]):
+                thread_list[j].start()
+            for j in range(0, self.m[l + 1]):
+                thread_list[j].join()
+
+            input = np.append(self.l[l].y, 1)
+        return self.l[self.L - 1].y
+
+    def __compute_neuron__(self,layer, neuron, input):
+        self.l[layer].v[neuron] = np.matmul(np.transpose(self.l[layer].w[neuron]), input)
+        self.l[layer].y[neuron] = self.activation_func(self.a[layer], self.b[layer], self.l[layer].v[neuron])
+
     def backward_propagation(self, x, d, alpha, eta):
         if len(d) != self.m[-1]:
             print(
@@ -149,6 +173,7 @@ class rede_neural():
 
     def get_sum_eL(self):
         return np.sum(self.l[-1].e ** 2)
+
 
     def calculate_error_inst(self, x, d):
         self.forward_propagation(x)

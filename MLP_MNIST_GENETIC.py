@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import classe_rede_neural as nnc
 import cv2 as cv2
+import time
 
 def main():
   L = 2
@@ -17,17 +18,17 @@ def main():
   rnd_seed = np.random.randint(65535)
   num_classes = 10
 
-  num_individuos = 250
-  generations = 200
-  dataset_division = 40
+  num_individuos = 120
+  generations = 50
+  dataset_division = 20
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.95
   mut_prob = 0.4
   mutation_multiplyer = 0.2
   weight_limit = 2.
-  elitism = 10
-  k = 10
+  elitism = 5
+  k = 15
 
   # population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
   population = None
@@ -64,6 +65,26 @@ def main():
 
   dataset.head()
 
+  # a1.initialize_weights_random()
+  # x = list(dataset.iloc[0, 1:(a1.m[0] + 1)])
+  #
+  # start_time = time.time()
+  # y = a1.forward_propagation(x)
+  # elapsed_time = time.time() - start_time
+  #
+  # print(f'Sem threads: {elapsed_time}')
+  # print(y)
+  #
+  # start_time = time.time()
+  # y = a1.forward_propagation_concurrent(x)
+  # elapsed_time = time.time() - start_time
+  #
+  # print(f'Com threads: {elapsed_time}')
+  # print(y)
+  #
+  #
+  #
+  # exit()
 
   a1, best_fitness_plt, fitness_list, count_generations,population = nnc.train_genetic(
     rede=a1,
