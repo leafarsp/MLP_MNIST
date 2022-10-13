@@ -14,24 +14,25 @@ def main():
   a1 = nnc.rede_neural(L, m, a, b)
 
   #a1 = nnc.load_neural_network('MNIST_Genetic2.xlsx')
+  # a1 = nnc.load_neural_network('MNIST_genetic\\MNIST_genetic_0000.xlsx')
 
   rnd_seed = np.random.randint(65535)
   num_classes = 10
 
-  num_individuos = 120
-  generations = 50
-  dataset_division = 20
+  num_individuos = 20
+  generations = 1000
+  dataset_division = 1
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.95
-  mut_prob = 0.4
+  mut_prob = 0.6
   mutation_multiplyer = 0.2
   weight_limit = 2.
-  elitism = 5
-  k = 15
+  elitism = 1
+  k = 5
 
-  # population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
-  population = None
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
+  #population = None
 
   # tam_pop_atual = len(population)
   # if tam_pop_atual < num_individuos:
@@ -52,18 +53,19 @@ def main():
   # dataset = dataset.loc[dataset['7'] == 1]
   #dataset = dataset[dataset['6'].isin([1,2,3,4,5,6,7,8,9,0])]
   print(f'Adapting dataset')
-  dataset = dataset.iloc[0:]
+  dataset = dataset.iloc[0:500]
 
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
 
   print(f'Loading and adapting test dataset')
   test_dataset = pd.read_csv('mnist_test.csv')
-  test_dataset = test_dataset.iloc[0:]
+  test_dataset = test_dataset.iloc[0:500]
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
 
   dataset.head()
+
 
   # a1.initialize_weights_random()
   # x = list(dataset.iloc[0, 1:(a1.m[0] + 1)])
@@ -85,6 +87,7 @@ def main():
   #
   #
   # exit()
+  # dataset_shufle = test_dataset.sample(frac=1, random_state=0, axis=0)
 
   a1, best_fitness_plt, fitness_list, count_generations,population = nnc.train_genetic(
     rede=a1,

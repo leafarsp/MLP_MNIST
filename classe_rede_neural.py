@@ -499,8 +499,7 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
     # else:
     #     print(f'ind unique ID: {neural_network.uniqueId}, Acertividade já testada')
     # return result
-# TODO: Verificar porque as vezes redes neurais de gerações diferentes, testando dados diferentes, retornam o
-#  mesmo fitness. Pode ser que os dados não estejam sendo embaralhados corretamente.
+# TODO: Corrigir algoritmo de divisão do dataset.
 def calculate_fitness(test_dataset, rede, num_classes, name=0):
     # logging.info("Thread %s: starting", name)
     n_inst = len(test_dataset.index)
@@ -635,6 +634,8 @@ def teste_neural_network(test_dataset, neural_network):
     acert = 100 * cont_acert / len(test_dataset)
     print(f'Acertividade: {acert:.2f}%')
     return acert
+
+# TODO: verificar a reprodutibilidade dos dados, colocando as sementes dos valores aleatórios nos lugares corretos.
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
@@ -892,20 +893,27 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
     thread_list = list()
 
     dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+    # dataset_shufle.reset_index(inplace=True)
+    # dataset_shufle.drop(columns=['index'], axis=1, inplace=True)
 
     for nind in range(0, num_individuos):
         #inst_inicial = nind * dn
         # inst_final = inst_inicial + dn - 1
         inst_inicial = int((n_inst-dist)/(num_individuos-1)) * nind
         inst_final =  int(inst_inicial + inst_by_ind -1)
+        if inst_final >= n_inst:
+            inst_inicial -= inst_final - n_inst +1
+            inst_final = n_inst-1
 
+
+        # print(f'inst_inicial:{inst_inicial}, inst_final:{inst_final}')
         # inst_inicial = nind * dn
         # inst_final = inst_inicial + dn - 1
 
         # thread_list.append(threading.Thread(target=calculate_fitness,
         #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
         thread_list.append(threading.Thread(target=calculate_fitness,
-                                            args=(dataset_shufle[inst_inicial:inst_final], population[nind],
+                                            args=(dataset_shufle.iloc[inst_inicial:inst_final+1], population[nind],
                                                   num_classes, nind)))
     best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
     best_acert_thread.start()
@@ -952,6 +960,9 @@ def population_play_concurent_GPU(dataset, test_dataset, num_classes, population
         # inst_final = inst_inicial + dn - 1
         inst_inicial = int((n_inst-dist)/(num_individuos-1)) * nind
         inst_final =  int(inst_inicial + inst_by_ind -1)
+        if inst_final >= n_inst:
+            inst_inicial -= inst_final - n_inst +1
+            inst_final = n_inst-1
 
         # inst_inicial = nind * dn
         # inst_final = inst_inicial + dn - 1
@@ -959,7 +970,7 @@ def population_play_concurent_GPU(dataset, test_dataset, num_classes, population
         # thread_list.append(threading.Thread(target=calculate_fitness,
         #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
         thread_list.append(threading.Thread(target=calculate_fitness_GPU,
-                                            args=(dataset_shufle[inst_inicial:inst_final], population[nind],
+                                            args=(dataset_shufle.iloc[inst_inicial:inst_final+1], population[nind],
                                                   num_classes, nind)))
     best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
     best_acert_thread.start()
@@ -1006,9 +1017,12 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
 
         inst_inicial = int((n_inst - dist) / (num_individuos - 1)) * nind
         inst_final = int(inst_inicial + inst_by_ind - 1)
+        if inst_final >= n_inst:
+            inst_inicial -= inst_final - n_inst +1
+            inst_final = n_inst-1
         # print(f'Gen: {generation:04d}, Ind:{nind:04d}, range inst {inst_inicial}->{inst_final}/{n_inst}')
 
-        calculate_fitness(dataset_shufle[inst_inicial:inst_final],population[nind],int(num_classes))
+        calculate_fitness(dataset_shufle.iloc[inst_inicial:inst_final+1],population[nind],int(num_classes))
         #acert = calculate_fitness(dataset_shufle[inst_inicial:inst_final], population[nind], int(num_classes))
 
 
