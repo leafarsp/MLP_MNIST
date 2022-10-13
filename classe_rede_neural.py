@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 import sys
+from numba import jit, cuda
 
 
 class layer():
@@ -107,7 +108,19 @@ class rede_neural():
         # return 1/(1+ np.exp(-a * v))
         return a * np.tanh(b * v)
 
+    # # function optimized to run on gpu
+    @jit(target_backend='cuda')
+    def activation_func_GPU(self, a, b, v):
+        # return 1/(1+ np.exp(-a * v))
+        return a * np.tanh(b * v)
+
     def d_func_ativacao(self, a, b, v):
+        # return (a * np.exp(-a * v)) / ((1 + np.exp(-a * v))**2)
+        return a * b * (1 - np.tanh(b * v) ** 2)
+
+    # # function optimized to run on gpu
+    @jit(target_backend='cuda')
+    def d_func_ativacao_GPU(self, a, b, v):
         # return (a * np.exp(-a * v)) / ((1 + np.exp(-a * v))**2)
         return a * b * (1 - np.tanh(b * v) ** 2)
 
@@ -143,9 +156,30 @@ class rede_neural():
             input = np.append(self.l[l].y, 1)
         return self.l[self.L - 1].y
 
+
+    def forward_propagation_GPU(self, x):
+        if len(x) != self.m[0]:
+            print(
+                f'Error, input vector has different size from expected. Input size= {len(x)}, Input nodes = {self.m[0]}')
+        input = np.append(x, 1)  # acrescenta 1 relativo ao bias
+        for l in range(0, self.L):
+            for j in range(0, self.m[l + 1]):
+                self.l[l].v[j] = self.__compute_neuron_GPU__(self.l[l].w[j], input)
+                # self.l[l].v[j] = np.matmul(np.transpose(self.l[l].w[j]), input)
+                self.l[l].y[j] = self.activation_func_GPU(self.a[l], self.b[l], self.l[l].v[j])
+
+            input = np.append(self.l[l].y, 1)
+        return self.l[self.L - 1].y
+
     def __compute_neuron__(self,layer, neuron, input):
         self.l[layer].v[neuron] = np.matmul(np.transpose(self.l[layer].w[neuron]), input)
         self.l[layer].y[neuron] = self.activation_func(self.a[layer], self.b[layer], self.l[layer].v[neuron])
+
+    # # function optimized to run on gpu
+    @jit(target_backend='cuda')
+    def __compute_neuron_GPU__(self, weight_vector, input_vector):
+        temp = np.transpose(weight_vector)
+        return np.matmul(np.transpose(weight_vector), input_vector)
 
     def backward_propagation(self, x, d, alpha, eta):
         if len(d) != self.m[-1]:
@@ -232,6 +266,25 @@ class rede_neural():
                 for w in range(0, self.m[l] + 1):
                     clone.l[l].w[j][w] = self.l[l].w[j][w]
         return clone
+
+    # # function optimized to run on gpu
+    @jit(target_backend='cuda')
+    def output_layer_activation_GPU(self, output_value, num_classes):
+        d = np.ones(num_classes, dtype=np.float64) * -1
+        # num = dataset_shufle.iloc[ni, 0]
+        d[output_value] = 1.
+        return d
+
+    def output_layer_activation(self, output_value, num_classes):
+        d = np.ones(num_classes, dtype=np.float64) * -1
+        # num = dataset_shufle.iloc[ni, 0]
+        d[output_value] = 1.
+        return d
+
+
+
+
+
 
 # class train_Neural_Network():
 #     def __init__(self):
@@ -362,7 +415,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
             x = list(dataset_shufle.iloc[ni, 1:(a1.m[0] + 1)])
             output_value = int(dataset_shufle.iloc[ni, 0])
             # d = [dataset_shufle.iloc[ni, 0]]
-            d = output_layer_activation(output_value=output_value, num_classes=num_classes)
+            d = a1.output_layer_activation(output_value=output_value, num_classes=num_classes)
             a1.forward_propagation(x=x)
             a1.backward_propagation(x=x, d=d, alpha=alpha[n], eta=eta[n])
 
@@ -405,6 +458,8 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     return a1, a1plt, Eav, n, acert
 
+
+
 def calculate_err_epoch(dataset, a1, func_d):
     n_inst = len(dataset.index)
     e_epoch = 0
@@ -416,11 +471,11 @@ def calculate_err_epoch(dataset, a1, func_d):
     Eav = 1 / (n_inst) * e_epoch
     return Eav
 
-def output_layer_activation(output_value, num_classes):
-    d = np.ones(num_classes) * -1
-    # num = dataset_shufle.iloc[ni, 0]
-    d[output_value] = 1.
-    return d
+# def output_layer_activation(output_value, num_classes):
+#     d = np.ones(num_classes) * -1
+#     # num = dataset_shufle.iloc[ni, 0]
+#     d[output_value] = 1.
+#     return d
 
 def teste_acertividade(test_dataset, num_classes, neural_network):
     cont_acert = 0
@@ -462,7 +517,7 @@ def calculate_fitness(test_dataset, rede, num_classes, name=0):
 
         y = rede.forward_propagation(x)
 
-        d = output_layer_activation(num_real,num_classes)
+        d = rede.output_layer_activation(num_real,num_classes)
         num_rede = rede.get_output_class()
 
 
@@ -502,6 +557,61 @@ def calculate_fitness(test_dataset, rede, num_classes, name=0):
     #return result
     # logging.info(f'Thread {name}: finished')
 
+def calculate_fitness_GPU(test_dataset, rede, num_classes, name=0):
+    # logging.info("Thread %s: starting", name)
+    n_inst = len(test_dataset.index)
+    err_avg = 0
+    result = 0
+    punishment = 0
+    err_class = 0
+    err_nan = 0
+    err_count_class = [0] * (num_classes+1)
+    for i in range(0, len(test_dataset)):
+
+        num_real = test_dataset.iloc[i, 0]
+        x = list(test_dataset.iloc[i, 1:])
+
+        y = rede.forward_propagation_GPU(x)
+
+        d = rede.output_layer_activation(num_real,num_classes)
+        num_rede = rede.get_output_class()
+
+
+        if num_rede != np.nan:
+            if (num_real != num_rede):
+                err_class += 1
+                err_count_class[int(num_real)] += 1
+        else:
+            err_nan +=1
+            err_count_class[num_classes] += 1
+        err = d - y
+
+        err_avg += np.sqrt(np.matmul(err, np.transpose(err))/len(err))
+
+    err_std_dev = np.std(err_count_class)
+    err_mean = np.mean(err_count_class)
+    err_max = np.max(err_count_class)
+    # erro de not a number é menos crítico do que o erro de classe, por isso ele é multiplicado por 0.6
+    punishment = (err_class + err_nan*0.1) /n_inst
+    punishment *= (1 + (err_mean + err_std_dev)/n_inst)
+
+    #punishment = (err_mean + err_std_dev + err_max)/n_inst
+
+
+    err_avg = err_avg / n_inst
+    b = 1 + 1 / (1 + np.exp(2))
+    c = -2
+    f = 2
+    a = -1
+    result = b + a / (1 + np.exp(-f * (err_avg) - c))
+    result *= (1- punishment)
+
+    rede.set_fitness(result)
+    # logging.info(f'Individual: {neural_network[nind].get_id()}, Generation: {neural_network[nind].neural_network()}, '
+    #              f'fitness: {neural_network[nind].get_fitness()}\n')
+    # print(f'Individual: {neural_network.get_id()}, Generation: {neural_network.get_generation()}, fitness: {neural_network.get_fitness()}\n')
+    #return result
+    # logging.info(f'Thread {name}: finished')
 
 
 
@@ -554,6 +664,122 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         # print(f'\nGeneration:{count_generations}\n')
 
         population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
+                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+        # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
+        #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+
+        print(f'count_generations={count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
+              f' best uniqueID: {best_ind.uniqueId} '
+              f'Best generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
+              f'Acertividade: {best_ind.get_acertividade():.7f}%, generation_time: {elapsed_time:.3f}')
+        local_rnd_seed += 1
+
+
+        fitness_list = get_fitness_list(population)
+        # Crossover e seleção K tornament
+        # for ind1 in population:
+        #     print(f'ind1.uniqueID: {ind1.uniqueId}, ind1.fitness={ind1.get_fitness():.10f}'
+        #           f' ind1.id = {ind1.get_id()}')
+
+        best_ind = get_best_ind(population, 0)
+        # print(f'\nbest_ind.uniqueID: {best_ind.uniqueId}, best_ind.fitness={best_ind.get_fitness():.10f} '
+        #       f'best_ind id: {best_ind.get_id()} Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}'
+        #       f' Acertividade: {best_ind.get_acertividade():.7f}%')
+
+
+
+        # # print(f'Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}')
+        # if best_ind.get_flag_teste_acertividade() != True:
+        #     print(f'Testando acertividade do melhor indivíduo, ger. {best_ind.get_generation()}, '
+        #           f'ind1.uniqueID: {best_ind.uniqueId}, id {best_ind.get_id()}')
+        #     # test_dataset_shufle = test_dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+        #     # test_dataset_shufle = test_dataset_shufle.iloc[0:int(len(test_dataset.index) / 10)]
+        #     teste_acertividade(test_dataset, num_classes, best_ind)
+        #     # best_ind.set_acertividade(acert)
+        #     print(f'Acertividade: {best_ind.get_acertividade():.7f}%'
+        #           f' best_ind.uniqueID: {best_ind.uniqueId}, best id: {best_ind.get_id()}')
+
+        # print(f'best_ind.fitness={best_ind.get_fitness():.10f} best_ind.uniqueID: {best_ind.uniqueId} '
+        #       f'best_ind id: {best_ind.get_id()} Best_ind.flag_acertividade = {best_ind.get_flag_teste_acertividade()}'
+        #       f' Acertividade: {best_ind.get_acertividade():.7f}%')
+
+
+        if count_generations < (generations-1):
+            next_gen = list()
+            apply_elitism(population, next_gen, elitism)
+
+
+
+            best_fitness_plt[count_generations - 1] = best_ind.fitness
+            watchdog=0
+            while (len(population)>elitism):
+
+
+                parent1, parent2 = k_tournament(population=population,k=k_tournament_fighters)
+
+                #print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
+                #      f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+
+                kids = crossover(parent1, parent2, mut_prob, mutation_multiplyer)
+
+                #mutate(kids,mutation_probability)
+
+                for kid in kids:
+                    if len(next_gen) < num_individuos:
+                        next_gen.append(kid)
+                        next_gen[-1].id = len(next_gen)-1
+                        next_gen[-1].set_generation(count_generations)
+
+                remove_individual(population, [parent1.id, parent2.id])
+            population = next_gen
+        # if count_generations % 5 == 0 or count_generations == 1:
+
+
+
+
+        end_time = time.time()
+
+    if watchdog > 1000:
+        print('Exit by watchdog.')
+    elif count_generations >= generations:
+        print('Exit by end of generations.')
+
+    print(f'Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
+    print(f'Acertividade: {acert}%')
+        # salvar indivídio
+    logging.info(f'End of Training')
+    best_fitness_plt[-1] = best_fitness_plt[-2]
+
+    return best_ind, best_fitness_plt, fitness_list, count_generations, population
+
+def train_genetic_GPU(rede, num_classes, rnd_seed, dataset, test_dataset,
+                  num_individuos, generations, step_plot, err_min, target_fitness,
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division = None, population=None):
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+    logging.info(f'Starting training')
+    local_rnd_seed = rnd_seed
+    count_generations = 0
+    watchdog = 0
+    best_fitness_plt = np.zeros(generations)
+
+    if population == None:
+        population = list()
+        initialize_population(population, num_individuos, rede, rnd_seed, weight_limit)
+    best_ind = get_best_ind(population, 0)
+
+    acert = 0
+    start_time = time.time()
+    end_time = time.time()
+    elapsed_time = 0
+    while(best_ind.fitness < target_fitness and count_generations < generations ):
+        elapsed_time = end_time - start_time
+        start_time = time.time()
+        count_generations += 1
+        # print(f'\nGeneration:{count_generations}\n')
+
+        population_play_concurent_GPU(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
                         count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
         # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
         #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
@@ -696,7 +922,59 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
     #     logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
     #           f'fitness: {population[nind].get_fitness()}\n')
 
+def population_play_concurent_GPU(dataset, test_dataset, num_classes, population,  rede, rnd_seed, generation,
+                              best_ind,acertividade, dataset_division = 1):
+    format = "%(asctime)s: %(message)s"
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
 
+    best_clone = best_ind.clone()
+
+    num_individuos = len(population)
+    n_inst = len(dataset.index)
+
+
+
+    max_inst_by_ind = int(n_inst / (num_individuos -1))
+
+    if dataset_division > (num_individuos - 1):
+        dataset_division = int(num_individuos - 1)
+
+    inst_by_ind = int(n_inst / dataset_division)
+    dist = int(inst_by_ind - max_inst_by_ind)
+
+    thread_list = list()
+
+    dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+
+    for nind in range(0, num_individuos):
+        #inst_inicial = nind * dn
+        # inst_final = inst_inicial + dn - 1
+        inst_inicial = int((n_inst-dist)/(num_individuos-1)) * nind
+        inst_final =  int(inst_inicial + inst_by_ind -1)
+
+        # inst_inicial = nind * dn
+        # inst_final = inst_inicial + dn - 1
+
+        # thread_list.append(threading.Thread(target=calculate_fitness,
+        #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
+        thread_list.append(threading.Thread(target=calculate_fitness_GPU,
+                                            args=(dataset_shufle[inst_inicial:inst_final], population[nind],
+                                                  num_classes, nind)))
+    best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
+    best_acert_thread.start()
+    for nind in range(0, num_individuos):
+        thread_list[nind].start()
+
+    for nind in range(0,num_individuos):
+        thread_list[nind].join()
+    best_acert_thread.join()
+    # print(f'best_clone.get_acertividade() = {best_clone.get_acertividade()}')
+    best_ind.set_acertividade(best_clone.get_acertividade())
+    # print(f'best_ind.get_acertividade() = {best_ind.get_acertividade()}')
+    # for nind in range(0, num_individuos):
+    #     logging.info(f'Individual: {population[nind].get_id()}, Generation: {population[nind].get_generation()}, '
+    #           f'fitness: {population[nind].get_fitness()}\n')
 
 def population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed, generation, best_ind,
                     acertividade, dataset_division = 1):
