@@ -19,28 +19,28 @@ def main():
   rnd_seed = np.random.randint(65535)
   num_classes = 10
 
-  num_individuos = 20
-  generations = 1000
+  num_individuos = 50
+  generations = 500
   dataset_division = 1
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.95
-  mut_prob = 0.6
+  mut_prob = 0.2
   mutation_multiplyer = 0.2
   weight_limit = 2.
-  elitism = 1
-  k = 5
+  elitism = 3
+  k = 10
 
-  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos, rede=a1)
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=25, rede=a1)
   #population = None
 
-  # tam_pop_atual = len(population)
-  # if tam_pop_atual < num_individuos:
-  #   for i in range(num_individuos - tam_pop_atual):
-  #     b1 = nnc.rede_neural(L, m, a, b)
-  #     b1.initialize_weights_random(weight_limit=weight_limit)
-  #     b1.set_id(tam_pop_atual + i)
-  #     population.append(b1)
+  tam_pop_atual = len(population)
+  if tam_pop_atual < num_individuos:
+    for i in range(num_individuos - tam_pop_atual):
+      b1 = nnc.rede_neural(L, m, a, b)
+      b1.initialize_weights_random(weight_limit=weight_limit)
+      b1.set_id(tam_pop_atual + i)
+      population.append(b1)
 
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
@@ -119,7 +119,7 @@ def main():
 
   #plt_results(a1, a1plt, Eav, dataset, n, acert)
 
-  plt.plot(best_fitness_plt[0:count_generations])
+  plt.plot(best_fitness_plt)
 
   err = nnc.calculate_err_epoch(dataset,a1,output_layer_activation)
   print(f'erro:{err}')

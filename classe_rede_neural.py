@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 import sys
-from numba import jit, cuda
+from numba import jit, cuda, float64
 
 
 class layer():
@@ -613,6 +613,32 @@ def calculate_fitness_GPU(test_dataset, rede, num_classes, name=0):
     # logging.info(f'Thread {name}: finished')
 
 
+# GPU functions
+ # # function optimized to run on gpu
+@jit(target_backend='cuda')
+def activation_func_GPU(a:np.float64, b:np.float64, v:np.float64):
+    # return 1/(1+ np.exp(-a * v))
+    return a * np.tanh(b * v)
+
+# # function optimized to run on gpu
+@jit(target_backend='cuda')
+def d_func_ativacao_GPU(a:np.float64, b:np.float64, v:np.float64):
+    # return (a * np.exp(-a * v)) / ((1 + np.exp(-a * v))**2)
+    return a * b * (1 - np.tanh(b * v) ** 2)
+
+ # # function optimized to run on gpu
+@jit(target_backend='cuda')
+def __compute_neuron_GPU__(weight_vector:np.ndarray, input_vector:np.ndarray):
+    temp = np.transpose(weight_vector)
+    return np.matmul(temp, input_vector)
+
+# # function optimized to run on gpu
+@jit(target_backend='cuda')
+def output_layer_activation_GPU(output_value:int, num_classes:int):
+    d = np.ones(num_classes, dtype=np.float64) * -1
+    # num = dataset_shufle.iloc[ni, 0]
+    d[output_value] = 1.
+    return d
 
 def teste_neural_network(test_dataset, neural_network):
     cont_acert = 0
@@ -750,6 +776,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         # salvar indivídio
     logging.info(f'End of Training')
     best_fitness_plt[-1] = best_fitness_plt[-2]
+    best_fitness_plt[-2] = best_fitness_plt[-3]
 
     return best_ind, best_fitness_plt, fitness_list, count_generations, population
 
@@ -1061,6 +1088,7 @@ def crossover(parent1, parent2,prob_mut, mutation_multiplyer):
             weight_mult1 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             weight_mult2 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             for w in range(0,parent1.m[l]+1):
+                # prob = np.random.randint(2)
                 if prob==0:
                     son1.l[l].w[j][w] = parent1.l[l].w[j][w] + weight_mult1
                     son2.l[l].w[j][w] = parent2.l[l].w[j][w] + weight_mult2
