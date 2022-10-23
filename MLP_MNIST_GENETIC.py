@@ -16,31 +16,43 @@ def main():
   #a1 = nnc.load_neural_network('MNIST_Genetic2.xlsx')
   # a1 = nnc.load_neural_network('MNIST_genetic\\MNIST_genetic_0000.xlsx')
 
+  # bias_classes = [1]
+  bias_classes = None
+
+
   rnd_seed = np.random.randint(65535)
   num_classes = 10
-
-  num_individuos = 50
-  generations = 500
+  n_inst = 50
+  num_individuos = 10
+  generations = 2000
   dataset_division = 1
   step_plot = 10
   err_min = 0.1
   target_fitness = 0.95
-  mut_prob = 0.2
-  mutation_multiplyer = 0.2
+  mut_prob = 0.05
+  mutation_multiplyer = 0.05
   weight_limit = 2.
-  elitism = 3
-  k = 10
+  elitism = 1
+  k = 3
 
-  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=25, rede=a1)
-  #population = None
+  print(f'mut_prob: {mut_prob}, mutation_multiplyer: {mutation_multiplyer}, elitism:{elitism}, k:{k}'
+        f' num_individuos:{num_individuos}, generations:{generations}, num. instancias:{n_inst}')
+  print(f'Classes favorecidas:{bias_classes}')
+  # population1 = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic_Numero_1_e_2\\MNIST_genetic',num_individuos=20)
+  # population2 = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic_Numero_3_e_4\\MNIST_genetic', num_individuos=20, start_id=20)
+  # population = population1 + population2
 
-  tam_pop_atual = len(population)
-  if tam_pop_atual < num_individuos:
-    for i in range(num_individuos - tam_pop_atual):
-      b1 = nnc.rede_neural(L, m, a, b)
-      b1.initialize_weights_random(weight_limit=weight_limit)
-      b1.set_id(tam_pop_atual + i)
-      population.append(b1)
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic',num_individuos=num_individuos)
+  # population = None
+  if population is not None:
+    tam_pop_atual = len(population)
+
+    if tam_pop_atual < num_individuos:
+      for i in range(num_individuos - tam_pop_atual):
+        b1 = nnc.rede_neural(L, m, a, b)
+        b1.initialize_weights_random(weight_limit=weight_limit)
+        b1.set_id(tam_pop_atual + i)
+        population.append(b1)
 
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
@@ -51,20 +63,21 @@ def main():
 
   #Filtrando apenas o número 1
   # dataset = dataset.loc[dataset['7'] == 1]
-  #dataset = dataset[dataset['6'].isin([1,2,3,4,5,6,7,8,9,0])]
+  # dataset = dataset[dataset['6'].isin([1,4])]
   print(f'Adapting dataset')
-  dataset = dataset.iloc[0:500]
+  dataset = dataset.iloc[0:n_inst]
 
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
   dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
 
   print(f'Loading and adapting test dataset')
   test_dataset = pd.read_csv('mnist_test.csv')
-  test_dataset = test_dataset.iloc[0:500]
+  test_dataset = test_dataset.iloc[0:n_inst]
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
   test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
 
   dataset.head()
+
 
 
   # a1.initialize_weights_random()
@@ -94,7 +107,7 @@ def main():
     num_classes=num_classes,
     rnd_seed=rnd_seed,
     dataset=dataset,
-    test_dataset=test_dataset,
+    test_dataset=dataset,
     num_individuos=num_individuos,
     generations=generations,
     step_plot=step_plot,
@@ -106,7 +119,8 @@ def main():
     elitism=elitism,
     k_tournament_fighters=k,
     dataset_division=dataset_division,
-    population=population)
+    population=population,
+    bias_classes=bias_classes)
 
 
 
@@ -119,12 +133,13 @@ def main():
 
   #plt_results(a1, a1plt, Eav, dataset, n, acert)
 
-  plt.plot(best_fitness_plt)
+  plt.plot(best_fitness_plt[0:-3])
 
   err = nnc.calculate_err_epoch(dataset,a1,output_layer_activation)
   print(f'erro:{err}')
-
-  acertividade = teste_acertividade(dataset, a1)
+  a1.flag_test_acertividade = False
+  acertividade = nnc.teste_acertividade(dataset, num_classes, a1, True)
+  print(f'Acertividade: {a1.acertividade:.3f}%')
   #a1.save_neural_network('neural_network2.xlsx')
 
   buttonPressed = False
@@ -249,20 +264,42 @@ def display_number(dataset, dataset_position, save=False):
     cv2.imwrite(f'num {dataset.iloc[dataset_position][0]} - dt_pos{dataset_position}.jpg', resized)
 
 
-def teste_acertividade(dataset, a1):
-  cont_acert = 0
-  for i in range(0, len(dataset)):
-    # local_image_array = list(test_dataset.iloc[i,1:65])
-    num_real = dataset.iloc[i, 0]
-    # print(len(local_image_array))
-    num_rede = digit_recog(a1, training_instance=i, dataset=dataset)[0]
-    print(f'Núm. real: {num_real}, núm rede: {num_rede}')
-    if num_rede != np.nan:
-      if (num_real == num_rede):
-        cont_acert += 1
+# def teste_acertividade(dataset, a1):
+#   cont_acert = 0
+#   for i in range(0, len(dataset)):
+#     # local_image_array = list(test_dataset.iloc[i,1:65])
+#     num_real = dataset.iloc[i, 0]
+#     # print(len(local_image_array))
+#     num_rede = digit_recog(a1, training_instance=i, dataset=dataset)[0]
+#     print(f'Núm. real: {num_real}, núm rede: {num_rede}')
+#     if num_rede != np.nan:
+#       if (num_real == num_rede):
+#         cont_acert += 1
+#
+#   return 100 * cont_acert / len(dataset)
 
-  return 100 * cont_acert / len(dataset)
+
+def main_tests():
+  dataset = pd.read_csv('mnist_train_small.csv')
+  dataset = dataset[dataset['6'].isin([1, 2, 3, 4])]
+  dataset = dataset.iloc[0:100]
+  dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
+  dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
+
+  population = nnc.load_population(filename=f'MNIST_genetic\\MNIST_genetic', num_individuos=20)
+
+  for ind in population:
+    ind.flag_test_acertividade = False
+    nnc.teste_acertividade(dataset, 10, ind, False)
+    print(f'\nid: {ind.get_id()} , acertividade:{ind.get_acertividade()}')
+
+  # a1 = nnc.load_neural_network('MNIST_genetic\\MNIST_genetic_0000.xlsx')
+  # a1.flag_test_acertividade = False
+  # nnc.teste_acertividade(dataset, 10, a1, True)
+
+
 
 
 if __name__=='__main__':
   main()
+  # main_tests()

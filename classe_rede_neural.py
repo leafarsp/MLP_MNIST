@@ -30,9 +30,10 @@ class rede_neural():
         self.uniqueId = self.__hash__()
         self.l = list()
         self.weights_initialized = False
-        self.fitness = 0
+        self.fitness = 0.
         self.acertividade = 0
         self.generation = 0
+        self.class_distinction_rate = 0.
         self.flag_test_acertividade = False
         for i in range(0, L):
             self.l.append(layer(m[i + 1], m[i]))
@@ -117,6 +118,12 @@ class rede_neural():
     def d_func_ativacao(self, a, b, v):
         # return (a * np.exp(-a * v)) / ((1 + np.exp(-a * v))**2)
         return a * b * (1 - np.tanh(b * v) ** 2)
+
+    def set_class_distinction_rate(self, class_distinction_rate:float):
+        self.class_distinction_rate = class_distinction_rate
+
+    def get_class_distinction_rate(self):
+        return self.class_distinction_rate
 
     # # function optimized to run on gpu
     @jit(target_backend='cuda')
@@ -477,8 +484,9 @@ def calculate_err_epoch(dataset, a1, func_d):
 #     d[output_value] = 1.
 #     return d
 
-def teste_acertividade(test_dataset, num_classes, neural_network):
+def teste_acertividade(test_dataset, num_classes, neural_network,print_result=False):
     cont_acert = 0
+    wrong_text = ' - wrong'
     if neural_network.get_flag_teste_acertividade() == False:
         for i in range(0, len(test_dataset)):
 
@@ -489,10 +497,16 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
 
             num_rede = neural_network.get_output_class()
 
+
             if num_rede != np.nan:
+
                 if (num_real == num_rede):
                     cont_acert += 1
+                    wrong_text = ""
 
+            if print_result:
+                print(f'Núm. real: {num_real}, núm rede: {num_rede}{wrong_text}')
+            wrong_text = ' - wrong'
         result = 100 * cont_acert / len(test_dataset)
         # print(f'Acertividade: {result}')
         neural_network.set_acertividade(result)
@@ -500,16 +514,21 @@ def teste_acertividade(test_dataset, num_classes, neural_network):
     #     print(f'ind unique ID: {neural_network.uniqueId}, Acertividade já testada')
     # return result
 # TODO: Corrigir algoritmo de divisão do dataset.
-def calculate_fitness(test_dataset, rede, num_classes, name=0):
+def calculate_fitness(test_dataset, rede, num_classes, bias_classes=None, name=0):
     # logging.info("Thread %s: starting", name)
     n_inst = len(test_dataset.index)
-    err_avg = 0
+    err_avg = 0.
+    err_av_list = [0.] * n_inst
+    err_av_mean = 0.
     result = 0
     punishment = 0
     err_class = 0
     err_nan = 0
     err_count_class = [0] * (num_classes+1)
-    for i in range(0, len(test_dataset)):
+    err_dist_class = [0] * num_classes
+    count_inst_class = [0] * num_classes
+    acert_cont_class = [0] * num_classes
+    for i in range(0, n_inst):
 
         num_real = test_dataset.iloc[i, 0]
         x = list(test_dataset.iloc[i, 1:])
@@ -524,20 +543,46 @@ def calculate_fitness(test_dataset, rede, num_classes, name=0):
             if (num_real != num_rede):
                 err_class += 1
                 err_count_class[int(num_real)] += 1
+            else:
+                acert_cont_class[int(num_real)] +=1
         else:
             err_nan +=1
             err_count_class[num_classes] += 1
         err = d - y
 
-        err_avg += np.sqrt(np.matmul(err, np.transpose(err))/len(err))
+        # err_avg += np.sqrt(np.matmul(err, np.transpose(err)))/n_inst
+        err_av_list[i] = np.sqrt(np.matmul(err, np.transpose(err)))
+        count_inst_class[int(num_real)] += 1
+        err_dist_class[int(num_real)] += err_av_list[i]
+
+    err_avg = np.sqrt(np.matmul(err_av_list, np.transpose(err_av_list)))
+    for i in range(0,num_classes):
+        err_dist_class[i] = err_dist_class[i] / count_inst_class[i]
+
+    err_avg2 = np.sqrt(np.matmul(err_dist_class,np.transpose(err_dist_class)))
+
 
     err_std_dev = np.std(err_count_class)
     err_mean = np.mean(err_count_class)
     err_max = np.max(err_count_class)
-    # erro de not a number é menos crítico do que o erro de classe, por isso ele é multiplicado por 0.6
-    punishment = (err_class + err_nan*0.1) /n_inst
-    punishment *= (1 + (err_mean + err_std_dev)/n_inst)
 
+    dif_classes_rate=0
+    for i in range(0,num_classes):
+        if acert_cont_class[i] > 0:
+            dif_classes_rate += 1/num_classes
+            if bias_classes is not None:
+                if i in bias_classes:
+                    dif_classes_rate *= (1.5/len(bias_classes))
+
+    rede.set_class_distinction_rate(dif_classes_rate)
+    # dá um bonus pra quem conseguir distinguir todas as classes
+    if dif_classes_rate > 0.99:
+        dif_classes_rate *= 1.5
+
+    # erro de not a number é menos crítico do que o erro de classe, por isso ele é multiplicado por 0.6
+    punishment = (err_class + err_nan*0.10) /n_inst
+    punishment *= (1. + (err_mean + err_std_dev)/n_inst)
+    punishment *= (1.1-dif_classes_rate)
     #punishment = (err_mean + err_std_dev + err_max)/n_inst
 
 
@@ -546,8 +591,10 @@ def calculate_fitness(test_dataset, rede, num_classes, name=0):
     c = -2
     f = 2
     a = -1
-    result = b + a / (1 + np.exp(-f * (err_avg) - c))
-    result *= (1- punishment)
+    # result = b + a / (1 + np.exp(-f * (err_avg) - c))
+    result = b + a / (1 + np.exp(-f * (err_avg2) - c))
+
+    # result *= (1- punishment)
 
     rede.set_fitness(result)
     # logging.info(f'Individual: {neural_network[nind].get_id()}, Generation: {neural_network[nind].neural_network()}, '
@@ -665,7 +712,8 @@ def teste_neural_network(test_dataset, neural_network):
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
-                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division = None, population=None):
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division = None,
+                  population=None, bias_classes=None):
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
@@ -691,14 +739,15 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         # print(f'\nGeneration:{count_generations}\n')
 
         population_play_concurent(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
-                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+                        count_generations, best_ind, best_ind.get_acertividade(), bias_classes, dataset_division)
         # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
         #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
 
-        print(f'count_generations={count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
+        print(f'gen: {count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
               f' best uniqueID: {best_ind.uniqueId} '
-              f'Best generation: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
-              f'Acertividade: {best_ind.get_acertividade():.7f}%, generation_time: {elapsed_time:.3f}')
+              f'Best gen: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
+              f'Acert.: {best_ind.get_acertividade():.3f}%, class dist. index: {best_ind.get_class_distinction_rate():.3f}, '
+              f'generation_time: {elapsed_time:.3f}')
         local_rnd_seed += 1
 
 
@@ -772,7 +821,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         print('Exit by end of generations.')
 
     print(f'Best individual: {best_ind.id}, fitness:{best_ind.fitness}')
-    print(f'Acertividade: {acert}%')
+    print(f'Acertividade: {best_ind.get_acertividade()}%')
         # salvar indivídio
     logging.info(f'End of Training')
     best_fitness_plt[-1] = best_fitness_plt[-2]
@@ -782,7 +831,8 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
 def train_genetic_GPU(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
-                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division = None, population=None):
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division = None,
+                      population=None, bias_classes=None):
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
@@ -808,7 +858,7 @@ def train_genetic_GPU(rede, num_classes, rnd_seed, dataset, test_dataset,
         # print(f'\nGeneration:{count_generations}\n')
 
         population_play_concurent_GPU(dataset, test_dataset, num_classes, population,  rede, local_rnd_seed,
-                        count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+                        count_generations, best_ind, best_ind.get_acertividade(), bias_classes, dataset_division)
         # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
         #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
 
@@ -897,7 +947,7 @@ def train_genetic_GPU(rede, num_classes, rnd_seed, dataset, test_dataset,
     return best_ind, best_fitness_plt, fitness_list, count_generations, population
 
 def population_play_concurent(dataset, test_dataset, num_classes, population,  rede, rnd_seed, generation,
-                              best_ind,acertividade, dataset_division = 1):
+                              best_ind,acertividade, bias_classes=None, dataset_division=1):
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
@@ -941,7 +991,7 @@ def population_play_concurent(dataset, test_dataset, num_classes, population,  r
         #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
         thread_list.append(threading.Thread(target=calculate_fitness,
                                             args=(dataset_shufle.iloc[inst_inicial:inst_final+1], population[nind],
-                                                  num_classes, nind)))
+                                                  num_classes, bias_classes, nind)))
     best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
     best_acert_thread.start()
     for nind in range(0, num_individuos):
@@ -1084,11 +1134,13 @@ def crossover(parent1, parent2,prob_mut, mutation_multiplyer):
     for l in range(0,parent1.L):
 
         for j in range(0,parent1.m[l+1]):
-            prob = np.random.randint(2)
+            # se o neurônio virá do pai ou da mãe
+            # prob = np.random.randint(2)
             weight_mult1 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             weight_mult2 = get_weight_multiplier(prob_mut, mutation_multiplyer)
             for w in range(0,parent1.m[l]+1):
-                # prob = np.random.randint(2)
+                # se o peso nesse neurônio virá do pai ou da mãe
+                prob = np.random.randint(2)
                 if prob==0:
                     son1.l[l].w[j][w] = parent1.l[l].w[j][w] + weight_mult1
                     son2.l[l].w[j][w] = parent2.l[l].w[j][w] + weight_mult2
@@ -1228,12 +1280,12 @@ def save_population(population,filename):
         print(f'Saving population {i:04d}/{len(population):04d}, id={id}, fitness={population[id].get_fitness():.7f}')
         population[id].save_neural_network(filename=f'{filename}_{i:04d}.xlsx')
 
-def load_population(filename, num_individuos, rede):
+def load_population(filename, num_individuos, start_id=0):
     population = list()
 
     for i in range(0, num_individuos):
         print(f'Loading population {i:04d}/{num_individuos:04d}')
         population.append(load_neural_network(f'{filename}_{i:04d}.xlsx'))
-        population[-1].id = i
+        population[-1].id = i + start_id
 
     return population
