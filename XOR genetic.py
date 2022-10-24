@@ -27,16 +27,16 @@ def main():
 
   test_dataset = dataset
 
-  num_individuos = 10
-  generations = 1000
+  num_individuos = 100
+  generations = 2000
   step_plot = 10
   err_min = 0.1
-  target_fitness = 0.9
-  mut_prob = 0.2
-  mutation_multiplyer = .2
-  weight_limit = 10.
-  elitism = 5
-  k = 5
+  target_fitness = 0.95
+  mut_prob = 0.4
+  mutation_multiplyer = 1.
+  weight_limit = .2
+  elitism = 1
+  k = 3
   dataset_division = 1
   # a1.initialize_weights_random()
 
@@ -58,7 +58,8 @@ def main():
     elitism=elitism,
     k_tournament_fighters=k,
     dataset_division=dataset_division,
-    population=population)
+    population=population,
+    processor='GPU')
 
   fitness_list.to_excel('fitness_list_XOR.xlsx')
 
@@ -66,7 +67,7 @@ def main():
 
   nnc.teste_neural_network(dataset, a1)
 
-  plt.plot(best_fitness_plt)
+  plt.plot(best_fitness_plt[0:-3])
 
   # err = nnc.calculate_err_epoch(dataset,a1,a1.output_layer_activation)
   # print(f'erro:{err}')
