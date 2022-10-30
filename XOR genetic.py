@@ -25,6 +25,8 @@ def main():
   dataset = pd.DataFrame(data=data)
   num_inst = len(dataset.index)
 
+  n_inst = len(dataset.index)
+
   test_dataset = dataset
 
   num_individuos = 100
@@ -78,11 +80,33 @@ def main():
   buttonPressed = False
   while not buttonPressed:
     buttonPressed = plt.waitforbuttonpress()
+
+  plt_retas(a1, dataset, n_inst)
 # def output_layer_activation(output_value):
 #   d = np.ones(10) * -1
 #   #num = dataset_shufle.iloc[ni, 0]
 #   d[output_value] = 1
 #   return d
+def plt_retas(rede, dataset, num_inst):
+  # Realiza construção do gráfico 2D das entradas e as retas
+  for n in range(0, num_inst):
+    x1 = dataset.iloc[n, 1]
+    x2 = dataset.iloc[n, 2]
+    d = dataset.iloc[n, 0]
+    plt.scatter(x1, x2, marker=f'${int(d)}$', s=200)
+  x_space = np.linspace(-1, 1, 10)
+
+  for j in range(0, rede.m[rede.L - 1]):
+    b1 = rede.l[rede.L - 2].w[j][2]
+    w1 = rede.l[rede.L - 2].w[j][0]
+    w2 = rede.l[rede.L - 2].w[j][1]
+
+    cy1 = (-b1 - w1 * x_space) / w2
+    plt.plot(x_space, cy1)
+
+  buttonPressed = False
+  while not buttonPressed:
+    buttonPressed = plt.waitforbuttonpress()
 
 def plt_results(a1,a1plt,Eav, dataset, n, acert):
   # n_inst = len(dataset.index)

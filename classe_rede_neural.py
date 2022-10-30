@@ -7,6 +7,7 @@ import threading
 import time
 import sys
 from numba import jit, cuda, float64
+from sklearn.neural_network import MLPClassifier
 
 
 class layer():
@@ -83,6 +84,7 @@ class rede_neural():
         df = pd.DataFrame(data=data, columns=columns)
         # print(df)
         for l in range(0, self.L):
+            temp_array = np.zeros((self.m[l]+1,self.m[l + 1]))
             for n in range(0, self.m[l + 1]):
                 temp_l = np.transpose(self.l[l].w[n])
                 # temp_l = np.transpose(temp_l)
@@ -90,9 +92,10 @@ class rede_neural():
                 # print(temp_l)
                 # print(df.loc[0:self.m[l], l+1].loc[:,n])
                 # print(df.loc[0:self.m[l] + 1, l + 1])
-                df.loc[0:self.m[l], l + 1].loc[:, n] = temp_l
+                # df.loc[0:self.m[l], l + 1].loc[:, n] = temp_l
+                temp_array[:,n] = temp_l
                 # df.loc[0:self.m[l] + 1, l + 1] = temp_l
-
+            df.loc[0:self.m[l], l + 1] = temp_array
         # exit()
         data2 = np.zeros((len(self.m), 4))
         data2[:] = np.nan
@@ -251,7 +254,9 @@ class rede_neural():
         num_out = np.nan
         cont_neuronio_ativo = 0
         for j in range(0, self.m[self.L]):
+        # for j in range(self.m[self.L]-1, -1, -1):
             if (self.l[self.L - 1].y[j] > (1 * threshold)):
+                # num_out = j
                 num_out = j
                 cont_neuronio_ativo += 1
             if (cont_neuronio_ativo > 1):
@@ -282,7 +287,7 @@ class rede_neural():
     #     return d
 
     def output_layer_activation(self, output_value, num_classes):
-        d = np.ones(num_classes, dtype=np.float64) * -1
+        d = np.ones(num_classes, dtype=np.float64) * -1.
         # num = dataset_shufle.iloc[ni, 0]
         d[output_value] = 1.
         return d
@@ -350,9 +355,39 @@ def load_neural_network(neural_network_xlsx):
     return a1
 
 
+def load_scikit_model(model:MLPClassifier):
+
+    L = len(model.coefs_)
+    m = [0] * (L+1)
+    a = [1.] * L
+    b = [1.] * L
+
+    for i in range(1,L+1):
+        m[i] = len(np.transpose(model.coefs_[i-1]))
+    m[0] = len(np.transpose(model.coefs_[0])[0])
+    print(f'L:{L}, m:{m}')
+    local_model = rede_neural(L,m,a,b)
+
+    for l in range(0, L):
+        # df[l + 1][0:self.m[l] + 1] = np.transpose(self.l[l].w)
+        for j in range(0, m[l + 1]):
+            # print(np.transpose(df.loc[l + 1][0:m[l] + 1]))
+            # print(f'np.shape(np.transpose(df[l + 1][0:m[l] + 1]))={np.shape(np.transpose(df[l + 1][0:m[l] + 3]))}, np.shape(a1.l[l].w) = {np.shape(a1.l[l].w)}\n')
+            # print(f'\n{local_model.l[l].w[j][0:-1]}')
+            # print(f'{np.transpose(model.coefs_[l])[j]}')
+            local_model.l[l].w[j][0:-1] = np.transpose(model.coefs_[l])[j]
+            local_model.l[l].w[j][-1] = model.intercepts_[l][j]
+            # local_model.l[l].w[0:-1] = np.transpose(model.coefs_[l])[j]
+            # local_model.l[l].w[-1] = model.intercepts_[l][j]
+
+    local_model.weights_initialized = True
+    return local_model
+
+
 def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, learning_rate,
-                         momentum, err_min, weight_limit):
+                         momentum, err_min, weight_limit, learning_rate_end=0.):
     start_time = dt.datetime.now()
+
 
     print(f'Start time: {start_time.year:04d}-{start_time.month:02d}-{start_time.day:02d}'
           f'--{start_time.hour:02d}:{start_time.minute:02d}:{start_time.second:02d}')
@@ -362,7 +397,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
     test_dataset = test_dataset
 
     # cria rede neural
-    a1 = rede
+    # rede = rede
 
     n_inst = len(dataset.index)
     # parâmetros de treinamento da rede
@@ -373,9 +408,9 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     n_cont = 0
 
-    eta = np.ones((a1.L, N))
-    for l in range(0, a1.L):
-        eta[l] = list(np.linspace(learning_rate[l], 0., N))
+    eta = np.ones((rede.L, N))
+    for l in range(0, rede.L):
+        eta[l] = list(np.linspace(learning_rate[l], learning_rate_end, N))
 
     # for l in range(0,a1.L):
     #   plt.plot(eta[l])
@@ -385,8 +420,8 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
 
     # plt.figure()
 
-    alpha = np.ones((a1.L, N))
-    for l in range(0, a1.L):
+    alpha = np.ones((rede.L, N))
+    for l in range(0, rede.L):
         alpha[l] = list(np.linspace(momentum[l], 0., N))
     # alpha[0] *= 0.000000  # camada de entrada
     # alpha[1] *= 0.000000  # camada oculta 1
@@ -395,8 +430,8 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
     alpha = np.transpose(alpha)
 
     # Inicializa os pesos com valores aleatórios e o bias como zero
-    if a1.weights_initialized == False:
-        a1.initialize_weights_random(random_seed=rnd_seed, weight_limit=weight_limit)
+    if rede.weights_initialized == False:
+        rede.initialize_weights_random(random_seed=rnd_seed, weight_limit=weight_limit)
 
     # Vetor de pesos para plotar gráficos de evolução deles.
     a1plt = list()
@@ -406,8 +441,8 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
     # início do treinamento
     start_time_epoch = dt.datetime.now()
     for ne in range(0, n_epoch):
+        dataset_shufle = shufle_dataset(dataset=dataset, rnd_seed=rnd_seed)
 
-        dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
         rnd_seed += 1
         e_epoch = 0
 
@@ -415,35 +450,36 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
             n = ni + ne * (n_inst)
             if n >= (N - 1):
                 break
-            x = list(dataset_shufle.iloc[ni, 1:(a1.m[0] + 1)])
+            x = list(dataset_shufle.iloc[ni, 1:(rede.m[0] + 1)])
             output_value = int(dataset_shufle.iloc[ni, 0])
             # d = [dataset_shufle.iloc[ni, 0]]
-            d = a1.output_layer_activation(output_value=output_value, num_classes=num_classes)
-            a1.forward_propagation(x=x)
-            a1.backward_propagation(x=x, d=d, alpha=alpha[n], eta=eta[n])
+            d = rede.output_layer_activation(output_value=output_value, num_classes=num_classes)
+            rede.forward_propagation(x=x)
+            rede.backward_propagation(x=x, d=d, alpha=alpha[n], eta=eta[n])
 
             if n >= step_plot:
                 if n % step_plot == 0:
-                    teste_acertividade(test_dataset, int(num_classes), a1)
-                    acert.append(a1.get_acertividade())
+                    rede.flag_test_acertividade = False
+                    teste_acertividade(test_dataset, int(num_classes), rede)
+                    acert.append(rede.get_acertividade())
                     elapsed_time = dt.datetime.now() - start_time_epoch
                     start_time_epoch = dt.datetime.now()
                     estimated_time_end = start_time_epoch + elapsed_time * (N // step_plot - n_cont)
                     n_cont += 1
-                    print(f'Instância {n}/{N}, Época {ne}/{n_epoch}, '
-                          f' Acert.: {acert[-1]:.4f}%, eta[L][n]: {eta[n][a1.L - 1]:.4f}, dt: {elapsed_time.seconds}s'
+                    print(f'Instância {n}/{N}, Época {ne}/{n_epoch}, Erro médio: {Eav[ne-1]:.7f}'
+                          f' Acert.: {acert[-1]:.4f}%, eta[L][n]: {eta[n][rede.L - 1]:.4f}, dt: {elapsed_time.seconds}s'
                           f' t_end: {estimated_time_end.year:04d}-{estimated_time_end.month:02d}-{estimated_time_end.day:02d}'
                           f'--{estimated_time_end.hour:02d}:{estimated_time_end.minute:02d}:{estimated_time_end.second:02d}')
-                    temp_rede = rede_neural(a1.L, a1.m, a1.a, a1.b)
-                    for l in range(0, a1.L):
-                        temp_rede.l[l].w = np.copy(a1.l[l].w)
+                    temp_rede = rede_neural(rede.L, rede.m, rede.a, rede.b)
+                    for l in range(0, rede.L):
+                        temp_rede.l[l].w = np.copy(rede.l[l].w)
                     a1plt.append(temp_rede)
                     # a1.save_neural_network('backup_neural_network.xlsx')
 
-            e_epoch += a1.get_sum_eL()
+            e_epoch += rede.get_sum_eL()
         Eav[ne] = 1 / (n_inst) * e_epoch
 
-        print(f'Erro Época {ne}/{n_epoch}: {Eav[ne - 1]:.5f}')
+        # print(f'Erro Época {ne}/{n_epoch}: {Eav[ne]:.5f}')
         # A linha abaixo calcula a média como escrito no livro, mas
         # não tem muito sentido calcular desse jeito, o erro
         # fica menor se o número de épocas aumenta.
@@ -459,7 +495,7 @@ def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_e
             break
     # teste da rede neural
 
-    return a1, a1plt, Eav, n, acert
+    return rede, a1plt, Eav, n, acert
 
 
 def calculate_err_epoch(dataset, a1, func_d):
@@ -516,6 +552,8 @@ def calculate_fitness(test_dataset, rede, num_classes, bias_classes=None, name=0
     n_inst = len(test_dataset.index)
     err_avg = 0.
     err_av_list = [0.] * n_inst
+    err_av_list2 = [0.] * num_classes
+
     err_av_mean = 0.
     result = 0
     punishment = 0
@@ -549,6 +587,7 @@ def calculate_fitness(test_dataset, rede, num_classes, bias_classes=None, name=0
             err_count_class[num_classes] += 1
         err = d - y
 
+        err_av_list2[int(num_real)]
         # err_avg += np.sqrt(np.matmul(err, np.transpose(err)))/n_inst
         err_av_list[i] = np.sqrt(np.matmul(err, np.transpose(err)))
         count_inst_class[int(num_real)] += 1
@@ -641,6 +680,7 @@ def teste_neural_network(test_dataset, neural_network):
         x = list(test_dataset.iloc[i, 1:])
 
         y = neural_network.forward_propagation(x)
+        # print(y)
         num_rede = neural_network.get_output_class()
 
         if num_rede != np.nan:
@@ -658,8 +698,8 @@ def teste_neural_network(test_dataset, neural_network):
 
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
-                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, dataset_division=None,
-                  population=None, bias_classes=None, processor='CPU'):
+                  mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, batch_size=None,
+                  dataset_division=None, population=None, bias_classes=None, processor='CPU'):
 
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
@@ -679,24 +719,47 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     start_time = time.time()
     end_time = time.time()
     elapsed_time = 0
+    if batch_size is not None:
+        if batch_size > (len(dataset.index)):
+            local_batch_size = (len(dataset.index)-1)
+        else:
+            local_batch_size = batch_size
+    else:
+        local_batch_size = (len(dataset.index) - 1)
+
+    dataset_start = 0
+    dataset_end = local_batch_size -1
+    # inst_by_division = dataset_end - dataset_start + 1
+    dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
+    dataset_shuffle_String = f'Dataset Shuffled'
+
     while (best_ind.fitness < target_fitness and count_generations < generations):
         elapsed_time = end_time - start_time
         start_time = time.time()
         count_generations += 1
         # print(f'\nGeneration:{count_generations}\n')
 
-        population_play_concurent(dataset, test_dataset, num_classes, population, rede, local_rnd_seed,
-                                  count_generations, best_ind, best_ind.get_acertividade(), bias_classes,
-                                  dataset_division, processor)
+        population_play_concurent(dataset_shuffle.iloc[dataset_start:dataset_end], test_dataset, num_classes, population,
+                                  rede, local_rnd_seed, count_generations, best_ind, best_ind.get_acertividade(),
+                                  bias_classes, dataset_division, processor)
         # population_play(dataset, test_dataset, num_classes, population, rede, rnd_seed,
         #                           count_generations, best_ind, best_ind.get_acertividade(), dataset_division)
+
+        dataset_start = dataset_end + 1
+        dataset_end += local_batch_size
+        if dataset_end > (len(dataset.index) - 1):
+            dataset_start = 0
+            dataset_end = local_batch_size -1
+            # dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
+            # dataset_shuffle_String = f'Dataset Shuffled'
 
         print(f'gen: {count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
               f' best uniqueID: {best_ind.uniqueId} '
               f'Best gen: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
               f'Acert.: {best_ind.get_acertividade():.3f}%, class dist. index: {best_ind.get_class_distinction_rate():.3f}, '
-              f'generation_time: {elapsed_time:.3f}')
+              f'generation_time: {elapsed_time:.3f} {dataset_shuffle_String}')
         local_rnd_seed += 1
+        dataset_shuffle_String = f''
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
@@ -767,6 +830,11 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
 
     return best_ind, best_fitness_plt, fitness_list, count_generations, population
 
+def shufle_dataset(dataset, rnd_seed):
+    dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+    dataset_shufle.reset_index(inplace=True)
+    dataset_shufle.drop(columns=['index'], axis=1, inplace=True)
+    return dataset_shufle
 
 def population_play_concurent(dataset, test_dataset, num_classes, population, rede, rnd_seed, generation,
                               best_ind, acertividade, bias_classes=None, dataset_division=1, processor='CPU'):
@@ -779,28 +847,28 @@ def population_play_concurent(dataset, test_dataset, num_classes, population, re
     num_individuos = len(population)
     n_inst = len(dataset.index)
 
-    max_inst_by_ind = int(n_inst / (num_individuos - 1))
+    # max_inst_by_ind = int(n_inst / (num_individuos - 1))
 
-    if dataset_division > (num_individuos - 1):
-        dataset_division = int(num_individuos - 1)
+    # if dataset_division > (num_individuos - 1):
+    #     dataset_division = int(num_individuos - 1)
 
-    inst_by_ind = int(n_inst / dataset_division)
-    dist = int(inst_by_ind - max_inst_by_ind)
+    # inst_by_ind = int(n_inst / dataset_division)
+    # dist = int(inst_by_ind - max_inst_by_ind)
 
     thread_list = list()
 
-    dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+    # dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
     # dataset_shufle.reset_index(inplace=True)
     # dataset_shufle.drop(columns=['index'], axis=1, inplace=True)
 
     for nind in range(0, num_individuos):
         # inst_inicial = nind * dn
         # inst_final = inst_inicial + dn - 1
-        inst_inicial = int((n_inst - dist) / (num_individuos - 1)) * nind
-        inst_final = int(inst_inicial + inst_by_ind - 1)
-        if inst_final >= n_inst:
-            inst_inicial -= inst_final - n_inst + 1
-            inst_final = n_inst - 1
+        # inst_inicial = int((n_inst - dist) / (num_individuos - 1)) * nind
+        # inst_final = int(inst_inicial + inst_by_ind - 1)
+        # if inst_final >= n_inst:
+        #     inst_inicial -= inst_final - n_inst + 1
+        #     inst_final = n_inst - 1
 
         # print(f'inst_inicial:{inst_inicial}, inst_final:{inst_final}')
         # inst_inicial = nind * dn
@@ -809,7 +877,7 @@ def population_play_concurent(dataset, test_dataset, num_classes, population, re
         # thread_list.append(threading.Thread(target=calculate_fitness,
         #                                     args=(dataset_shufle[0:], population[nind], int(num_classes), nind)))
         thread_list.append(threading.Thread(target=calculate_fitness,
-                                            args=(dataset_shufle.iloc[inst_inicial:inst_final + 1], population[nind],
+                                            args=(dataset.iloc[:], population[nind],
                                                   num_classes, bias_classes, nind,processor)))
     best_acert_thread = threading.Thread(target=teste_acertividade, args=(test_dataset, int(num_classes), best_clone))
     best_acert_thread.start()
@@ -851,6 +919,8 @@ def population_play(dataset, test_dataset, num_classes, population, rede, rnd_se
 
     for nind in range(0, num_individuos):
         dataset_shufle = dataset.sample(frac=1, random_state=rnd_seed, axis=0)
+        dataset_shufle.reset_index(inplace=True)
+        dataset_shufle.drop(columns=['index'], axis=1, inplace=True)
 
         # inst_inicial = nind * dn
         # inst_final = inst_inicial + dn - 1

@@ -15,11 +15,17 @@ def main():
   a = [1.7, 0.9]
   b = [0.002, 1.]
   #b = [2 / 3, 2 / 3, 2 / 3]
-  eta = [0.9, 0.8]
+  eta = [0.1, 0.1]
+  learning_rate_end = 0.1
   alpha = [0.0000,  0.]
 
 
-  a1 = nnc.rede_neural(L, m, a, b)
+  # a1 = nnc.rede_neural(L, m, a, b)
+
+  # a1 = nnc.load_neural_network('MNIST_genetic\\MNIST_genetic_0000.xlsx')
+
+
+  a1 = nnc.load_neural_network('MNISTS_BackProp.xlsx')
 
   # Base de dados de treinamento
   # Se for utilizar o Jupyter notebook, utilizar a linha abaixo
@@ -46,10 +52,10 @@ def main():
 
   rnd_seed = 10
 
-  n_epoch = 2
+  n_epoch = 30
   n_inst = len(dataset.index)
   N = n_inst * n_epoch
-  step_plot = int(N / (n_epoch * 10))
+  step_plot = int(N / (n_epoch * 1))
 
   err_min = 0.5
   # a1, a1plt, Eav, n = nnc.train_neural_network(a1, rnd_seed, dataset, dataset, n_epoch, step_plot, eta, alpha, err_min)
@@ -59,15 +65,33 @@ def main():
   # print(f'\na2.l[l].w=\n{a2.l[1].w}')
   #
 
-  a1, a1plt, Eav, n , acert = nnc.train_neural_network(a1, 10, rnd_seed, dataset, test_dataset, n_epoch, step_plot, eta, alpha,
-                                               err_min, 1.)
+  a1, a1plt, Eav, n , acert = nnc.train_neural_network(
+    rede=a1,
+    num_classes=10,
+    rnd_seed=rnd_seed,
+    dataset=dataset,
+    test_dataset=test_dataset,
+    n_epoch=n_epoch,
+    step_plot=step_plot,
+    learning_rate=eta,
+    momentum=alpha,
+    err_min=err_min,
+    weight_limit=1.,
+    learning_rate_end=learning_rate_end)
+
+
+
+  a1.save_neural_network('MNISTS_BackProp.xlsx')
   # print(f'\na1.l[l].w=\n{a1.l[1].w}')
 
   plt_results(a1, a1plt, Eav, dataset, n, acert)
-
+  a1.flag_test_acertividade = False
   err = nnc.calculate_err_epoch(dataset,a1,output_layer_activation)
   print(f'erro:{err}')
-  a1.save_neural_network('neural_network2.xlsx')
+
+  acertividade = nnc.teste_acertividade(dataset, 10, a1, True)
+  print(f'Acertividade: {a1.acertividade:.3f}%')
+
 def output_layer_activation(output_value):
   d = np.ones(10) * -1
   #num = dataset_shufle.iloc[ni, 0]
