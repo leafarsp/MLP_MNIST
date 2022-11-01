@@ -27,14 +27,14 @@ def main():
     rnd_seed = np.random.randint(65535)
     num_classes = 10
     n_inst = 500
-    num_individuos = 100
-    generations = 50
+    num_individuos = 50
+    generations = 400
     dataset_division = 1
     batch_size = 500
     step_plot = 10
     err_min = 0.1
     target_fitness = 0.9
-    mut_prob = 0.05
+    mut_prob = 0.2
     mutation_multiplyer = 0.05
     weight_limit = 2.
     elitism = 4
