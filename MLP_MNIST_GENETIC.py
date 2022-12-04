@@ -9,8 +9,10 @@ import time
 def main():
     L = 2
     m = [(28 * 28), 15, 10]
-    a = [1.7, 0.9]
-    b = [0.002, 1.]
+    # a = [1.7, 0.9]
+    # b = [0.002, 1.]
+    a = [1., 1.]
+    b = [1., 1.]
     # b = [2 / 3, 2 / 3, 2 / 3]
     a1 = nnc.rede_neural(L, m, a, b)
     # a1.initialize_weights_random(2.)
@@ -26,19 +28,19 @@ def main():
 
     rnd_seed = np.random.randint(65535)
     num_classes = 10
-    n_inst = 500
-    num_individuos = 50
-    generations = 400
+    n_inst = 19999
+    num_individuos = 25
+    generations = 15
     dataset_division = 1
-    batch_size = 500
+    batch_size = n_inst
     step_plot = 10
     err_min = 0.1
     target_fitness = 0.9
-    mut_prob = 0.2
-    mutation_multiplyer = 0.05
+    mut_prob = 0.1
+    mutation_multiplyer = 0.1
     weight_limit = 2.
-    elitism = 4
-    k = 15
+    elitism = 3
+    k = 25
 
     print(f'mut_prob: {mut_prob}, mutation_multiplyer: {mutation_multiplyer}, elitism:{elitism}, k:{k}'
           f' num_individuos:{num_individuos}, generations:{generations}, num. instancias:{n_inst}')
@@ -71,14 +73,14 @@ def main():
     print(f'Adapting dataset')
     dataset = dataset.iloc[0:n_inst]
 
-    dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] / 255
-    dataset.iloc[:, 1:-1] = dataset.iloc[:, 1:-1] * 2. - 1.
+    dataset.iloc[:, 1:] = dataset.iloc[:, 1:] / 255
+    dataset.iloc[:, 1:] = dataset.iloc[:, 1:] * 2. - 1.
 
     print(f'Loading and adapting test dataset')
     test_dataset = pd.read_csv('mnist_test.csv')
     test_dataset = test_dataset.iloc[0:n_inst]
-    test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] / 255
-    test_dataset.iloc[:, 1:-1] = test_dataset.iloc[:, 1:-1] * 2. - 1.
+    test_dataset.iloc[:, 1:] = test_dataset.iloc[:, 1:] / 255
+    test_dataset.iloc[:, 1:] = test_dataset.iloc[:, 1:] * 2. - 1.
 
     dataset.head()
 
@@ -123,7 +125,10 @@ def main():
         batch_size=batch_size,
         dataset_division=dataset_division,
         population=population,
-        bias_classes=bias_classes)
+        bias_classes=bias_classes,
+        parents_selection_mode=nnc.selection_parents_mode.ROULETTE_WHEEL,
+        shuffle_dataset=False
+    )
 
     fitness_list.to_excel('fitness_list.xlsx')
 

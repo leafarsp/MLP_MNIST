@@ -8,12 +8,18 @@ import time
 import sys
 from numba import jit, cuda, float64
 from sklearn.neural_network import MLPClassifier
+from enum import Enum
 
 
+class selection_parents_mode(Enum):
+    K_TOURNAMENT=1
+    ROULETTE_WHEEL=2
+    RANK_SELECTION=3
 class layer():
     def __init__(self, m, m_ant):
         self.w = np.ones((m, m_ant + 1))
         self.w_ant = np.zeros((m, m_ant + 1))
+        self.w_correction_ant = np.zeros((m, m_ant + 1))
         self.y = np.ones(m)
         self.d = np.ones(m)
         self.v = np.ones(m)
@@ -211,9 +217,12 @@ class rede_neural():
                 else:
                     input = np.append(self.l[l - 1].y, 1)
 
-                w_temp = self.l[l].w[j] + alpha[l] * self.l[l].w_ant[j] + eta[l] * self.l[l].delta[j] * input
-                self.l[l].w_ant[j] = np.copy(self.l[l].w[j])
-                self.l[l].w[j] = w_temp
+                w_correction = alpha[l] * self.l[l].w_correction_ant[j] + eta[l] * self.l[l].delta[j] * input
+
+                self.l[l].w_correction_ant[j] = w_correction
+                # w_temp = self.l[l].w[j] + alpha[l] * self.l[l].w_ant[j] + eta[l] * self.l[l].delta[j] * input
+                # self.l[l].w_ant[j] = np.copy(self.l[l].w[j])
+                self.l[l].w[j] += w_correction
 
     def get_sum_eL(self):
         return np.sum(self.l[-1].e ** 2)
@@ -292,7 +301,40 @@ class rede_neural():
         d[output_value] = 1.
         return d
 
+    def convert_model_to_SciKitLearning(self):
+        hidden_layer_sizes = tuple(self.m[1:-1])
+        # print(hidden_layer_sizes)
+        # exit()
+        L = self.L
+        model = MLPClassifier(
+            hidden_layer_sizes=hidden_layer_sizes)
 
+        X = [[-1] * self.m[0]]
+        y = [[-1] * self.m[-1]]
+
+        # print(np.shape(X))
+        # print(np.shape(y))
+        model.fit(X,y)
+        # print(np.shape(model.coefs_[0]))
+        # print(np.shape(np.transpose(self.l[0].w)[0:-1]))
+        # exit()
+
+        for l in range(0, L):
+
+            # df[l + 1][0:self.m[l] + 1] = np.transpose(self.l[l].w)
+            # for j in range(0, self.m[l + 1]):
+
+            # print(f'Layer:{l}')
+            # print(f'{np.shape(np.transpose(self.l[l].w)[0:-1])}')
+
+            model.coefs_[l] = np.transpose(self.l[l].w)[0:-1]
+            model.intercepts_[l] = np.transpose(self.l[l].w)[-1]
+            # print(f'rede: {np.transpose(self.l[l].w[j][0:-1])}\n')
+            # print(f'model: {model.coefs_[l]}')
+
+                # model.coefs_[l][j] = np.transpose(rede.l[l].w[j][0:-1])
+                # model.intercepts_[l][j] = rede.l[l].w[j][-1]
+        return model
 # class train_Neural_Network():
 #     def __init__(self):
 #         pass
@@ -382,6 +424,7 @@ def load_scikit_model(model:MLPClassifier):
 
     local_model.weights_initialized = True
     return local_model
+
 
 
 def train_neural_network(rede, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, learning_rate,
@@ -699,7 +742,9 @@ def teste_neural_network(test_dataset, neural_network):
 def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                   num_individuos, generations, step_plot, err_min, target_fitness,
                   mut_prob, weight_limit, mutation_multiplyer, elitism, k_tournament_fighters, batch_size=None,
-                  dataset_division=None, population=None, bias_classes=None, processor='CPU'):
+                  dataset_division=None, population=None, bias_classes=None, processor='CPU',
+                  parents_selection_mode: selection_parents_mode = selection_parents_mode.K_TOURNAMENT,
+                  shuffle_dataset=True):
 
     format = "%(asctime)s: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
@@ -730,8 +775,12 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
     dataset_start = 0
     dataset_end = local_batch_size -1
     # inst_by_division = dataset_end - dataset_start + 1
-    dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
-    dataset_shuffle_String = f'Dataset Shuffled'
+    if shuffle_dataset:
+        dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
+        dataset_shuffle_str = f'Dataset Shuffled'
+    else:
+        dataset_shuffle = dataset
+        dataset_shuffle_str = f''
 
     while (best_ind.fitness < target_fitness and count_generations < generations):
         elapsed_time = end_time - start_time
@@ -750,16 +799,17 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
         if dataset_end > (len(dataset.index) - 1):
             dataset_start = 0
             dataset_end = local_batch_size -1
-            # dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
-            # dataset_shuffle_String = f'Dataset Shuffled'
+            if shuffle_dataset:
+                dataset_shuffle = shufle_dataset(dataset=dataset, rnd_seed=local_rnd_seed)
+                dataset_shuffle_str = f'Dataset Shuffled'
 
         print(f'gen: {count_generations:04d}/{generations:04d}, Best: {best_ind.id:04d},'
               f' best uniqueID: {best_ind.uniqueId} '
               f'Best gen: {best_ind.get_generation():04d}, fitness:{best_ind.fitness:.10f}, '
               f'Acert.: {best_ind.get_acertividade():.3f}%, class dist. index: {best_ind.get_class_distinction_rate():.3f}, '
-              f'generation_time: {elapsed_time:.3f} {dataset_shuffle_String}')
+              f'generation_time: {elapsed_time:.3f} {dataset_shuffle_str}')
         local_rnd_seed += 1
-        dataset_shuffle_String = f''
+        dataset_shuffle_str = f''
 
         fitness_list = get_fitness_list(population)
         # Crossover e seleção K tornament
@@ -795,10 +845,11 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
             watchdog = 0
             while (len(population) > elitism):
 
-                parent1, parent2 = k_tournament(population=population, k=k_tournament_fighters)
+
+                parent1, parent2 = select_parents(population=population, k=k_tournament_fighters, mode=parents_selection_mode)
 
                 # print(f'Parent1 id: {parent1.id}, Parent1 fitness: {parent1.fitness} '
-                #      f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
+                #       f'Parent2 id: {parent2.id}, Parent2 fitness: {parent2.fitness}')
 
                 kids = crossover(parent1, parent2, mut_prob, mutation_multiplyer)
 
@@ -811,6 +862,7 @@ def train_genetic(rede, num_classes, rnd_seed, dataset, test_dataset,
                         next_gen[-1].set_generation(count_generations)
 
                 remove_individual(population, [parent1.id, parent2.id])
+
             population = next_gen
         # if count_generations % 5 == 0 or count_generations == 1:
 
@@ -1046,6 +1098,79 @@ def get_ind(population, id_list):
             inds.append(ind)
     return inds
 
+def get_rank_array(array):
+    positions = np.arange(1, len(array)+1)
+    table = np.dstack((array, positions))[0]
+    table = table[table[:, 0].argsort()]
+    table[:,0]=positions
+    table = table[table[:, 1].argsort()]
+
+    # print(table)
+    # print(array)
+    # print(table[:,0])
+    return table[:,0]
+
+# Roda a roleta enviesada e retorna a posição no array fitness_list
+# os modos podem ser 'roulete wheel' ou 'rank selection'
+# após a roda "parar" de girar
+def rotate_roulette_wheel(fitness_list, mode:selection_parents_mode=selection_parents_mode.ROULETTE_WHEEL):
+    return_value = 0
+    if mode == selection_parents_mode.ROULETTE_WHEEL:
+        local_fitness_list = fitness_list
+    elif mode == selection_parents_mode.RANK_SELECTION:
+        local_fitness_list = get_rank_array(fitness_list)
+
+    positions = np.arange(0, len(local_fitness_list))
+    table = np.dstack((local_fitness_list, positions))[0]
+    table_sorted = table[table[:, 0].argsort()]
+
+    fitness_list_sum = np.cumsum(table_sorted[:,0])
+
+    a = np.random.rand() * np.max(fitness_list_sum)
+
+    position = 0
+
+    for i in range(0,len(fitness_list_sum)):
+        if a < fitness_list_sum[i]:
+            position = i
+            break
+
+    return_value = int(table_sorted[position][1])
+
+    return return_value
+
+
+
+def select_parents(population, k, rnd_seed=None, mode:selection_parents_mode=selection_parents_mode.K_TOURNAMENT):
+
+    local_population = population
+    if mode == 'k tournament':
+        parent1, parent2 = k_tournament(population, k, rnd_seed=None)
+    else:
+        if mode == 'roulette wheel':
+            mode = 'roulette wheel'
+        elif mode == 'rank selection':
+            mode = 'rank selection'
+        fitness_list1 = get_fitness_list(local_population)['fitness'].to_list()
+        fitness_list2 = fitness_list1.copy()
+
+        id_list1 = get_fitness_list(local_population)['id'].to_list()
+        id_list2 = id_list1.copy()
+
+
+        parent1_local_id = rotate_roulette_wheel(fitness_list1, mode=mode)
+        fitness_list2.pop(parent1_local_id)
+        id_list2.pop(parent1_local_id)
+
+        parent2_local_id = rotate_roulette_wheel(fitness_list2, mode=mode)
+        # print(f'{id_list1}')
+        # print(f'parent1_local_id: {parent1_local_id}, real id{id_list1[parent1_local_id]}')
+        # print(f'parent2_local_id: {parent2_local_id}, real id{id_list2[parent2_local_id]}\n')
+        parent1, parent2 = get_ind(population, [id_list1[parent1_local_id], id_list2[parent2_local_id]])
+
+
+
+    return parent1, parent2
 
 def k_tournament(population, k, rnd_seed=None):
     # próxima atualização: fazer utilizando a função .iloc do pandas

@@ -7,9 +7,11 @@ import time
 
 def main():
   L = 2
-  m = [2, 4, 2]
+  m = [2, 2, 2]
   a = [0.9, 0.9]
   b = [0.5, 0.5]
+  # a = [1., 1.]
+  # b = [1., 1]
   # b = [2 / 3, 2 / 3, 2 / 3]
   a1 = nnc.rede_neural(L, m, a, b)
 
@@ -30,15 +32,15 @@ def main():
   test_dataset = dataset
 
   num_individuos = 100
-  generations = 2000
+  generations = 4000
   step_plot = 10
   err_min = 0.1
-  target_fitness = 0.95
-  mut_prob = 0.4
-  mutation_multiplyer = 1.
-  weight_limit = .2
-  elitism = 1
-  k = 3
+  target_fitness = 0.9999999999
+  mut_prob = 0.1
+  mutation_multiplyer = 0.05
+  weight_limit = .1
+  elitism = 5
+  k = 5
   dataset_division = 1
   # a1.initialize_weights_random()
 
@@ -48,7 +50,7 @@ def main():
     num_classes=num_classes,
     rnd_seed=rnd_seed,
     dataset=dataset,
-    test_dataset=test_dataset,
+    test_dataset=dataset,
     num_individuos=num_individuos,
     generations=generations,
     step_plot=step_plot,
@@ -59,9 +61,13 @@ def main():
     mutation_multiplyer=mutation_multiplyer,
     elitism=elitism,
     k_tournament_fighters=k,
+    batch_size=num_inst,
     dataset_division=dataset_division,
     population=population,
-    processor='GPU')
+    bias_classes=None,
+    parents_selection_mode=nnc.selection_parents_mode.ROULETTE_WHEEL,
+    shuffle_dataset=False
+  )
 
   fitness_list.to_excel('fitness_list_XOR.xlsx')
 

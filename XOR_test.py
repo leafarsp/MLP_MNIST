@@ -45,11 +45,14 @@ def plt_weights(a1, a1plt):
 def main():
     L = 2
     m = [2, 2, 2]
-    a = [0.9, 0.9]
-    b = [0.5, 0.5]
+    # a = [0.9, 0.9]
+    # b = [0.5, 0.5]
+    a = [1., 1.]
+    b = [1., 1.]
     #b = [2 / 3, 2 / 3, 2 / 3]
-    eta = [0.9,0.8]
-    alpha = [0.000,  0.]
+    eta = [0.8,0.8]
+    learning_rate_end = 0.01
+    alpha = [0.1,  0.1]
     num_classes = 2
 
 
@@ -59,10 +62,10 @@ def main():
     dataset = pd.DataFrame(data=data)
     test_dataset = dataset
 
-    rnd_seed = np.random.seed(10)
+    rnd_seed = 1
 
 
-    n_epoch = 2000
+    n_epoch = 20000
     n_inst = len(dataset.index)
     N = n_inst * n_epoch
     step_plot = int(N / (n_epoch))
@@ -71,6 +74,20 @@ def main():
 
     a1, a1plt, Eav, n , acert = nnc.train_neural_network(a1, num_classes, rnd_seed, dataset, test_dataset, n_epoch, step_plot, eta, alpha,
                                                   err_min, 1.)
+
+    a1, a1plt, Eav, n, acert = nnc.train_neural_network(
+        rede=a1,
+        num_classes=num_classes,
+        rnd_seed=rnd_seed,
+        dataset=dataset,
+        test_dataset=test_dataset,
+        n_epoch=n_epoch,
+        step_plot=step_plot,
+        learning_rate=eta,
+        momentum=alpha,
+        err_min=err_min,
+        weight_limit=1.,
+        learning_rate_end=learning_rate_end)
 
     a1.save_neural_network('neural_network_XOR_BackProp.xlsx')
     plt_retas(a1,dataset,n_inst)
